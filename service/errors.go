@@ -15,3 +15,7 @@ func IsEmailAlreadyTakenError(err error) bool {
 func IsLoginNameAlreadyTakenError(err error) bool {
 	return err == storage.LoginNameAlreadyTaken
 }
+
+func IsUserEmailMustBeVerifiedError(err error) bool {
+	return err == UserEmailMustBeVerified
+}

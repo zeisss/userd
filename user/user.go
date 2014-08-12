@@ -8,5 +8,6 @@ type User struct {
 	LoginName         string
 	LoginPasswordHash string
 
-	Email string
+	Email         string
+	EmailVerified bool
 }

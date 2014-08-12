@@ -118,6 +118,7 @@ func (h *GetUserHandler) writeUser(resp http.ResponseWriter, theUser *user.User)
 	result["profile_name"] = theUser.ProfileName
 	result["email"] = theUser.Email
 	result["login_name"] = theUser.LoginName
+	result["email_verified"] = theUser.EmailVerified
 
 	return json.NewEncoder(resp).Encode(result)
 }
@@ -213,6 +214,8 @@ func (h *AuthenticationHandler) ServeHTTP(resp http.ResponseWriter, req *http.Re
 			h.writeNotFoundError(resp)
 		} else if err == service.InvalidCredentials {
 			h.writeBadRequest(resp)
+		} else if service.IsUserEmailMustBeVerifiedError(err) {
+			h.writeBadRequest(resp, err.Error())
 		} else {
 			h.writeProcessingError(resp, err)
 		}
@@ -221,4 +224,42 @@ func (h *AuthenticationHandler) ServeHTTP(resp http.ResponseWriter, req *http.Re
 		resp.Write([]byte(userID))
 	}
 
+}
+
+// ----------------------------------------------
+type VerifyEmailHandler struct{ BaseHandler }
+
+func (h *VerifyEmailHandler) ServeHTTP(resp http.ResponseWriter, req *http.Request) {
+	userID, ok := h.UserID(req)
+	if !ok {
+		h.writeBadRequest(resp, "No id parameter given.")
+		return
+	}
+
+	email, emailGiven := h.Email(req)
+
+	var err error
+	if emailGiven {
+		err = h.UserService.CheckAndSetEmailVerified(userID, email)
+	} else {
+		err = h.UserService.SetEmailVerified(userID)
+	}
+
+	if err != nil {
+		if service.IsNotFoundError(err) {
+			h.writeNotFoundError(resp)
+		} else {
+			h.writeProcessingError(resp, err)
+		}
+	} else {
+		resp.WriteHeader(http.StatusNoContent)
+	}
+}
+
+func (h *VerifyEmailHandler) Email(req *http.Request) (string, bool) {
+	email, ok := req.Form["email"]
+	if !ok || len(email) == 0 || email[0] == "" {
+		return "", false
+	}
+	return email[0], true
 }

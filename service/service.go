@@ -8,13 +8,24 @@ import (
 )
 
 var (
-	InvalidCredentials = errors.New("Invalid credentials")
+	InvalidCredentials       = errors.New("Invalid credentials.")
+	InvalidVerificationEmail = errors.New("Email adress does not match current email for user.")
+	UserEmailMustBeVerified  = errors.New("Email must be verified to authenticate.")
 )
 
-type UserService struct {
+type Dependencies struct {
 	IdFactory   IdFactory
 	Hasher      PasswordHasher
 	UserStorage UserStorage
+}
+
+type Config struct {
+	AuthEmailMustBeVerified bool
+}
+
+type UserService struct {
+	Dependencies
+	Config
 }
 
 func (us *UserService) CreateUser(profileName, email, loginName, loginPassword string) (string, error) {
@@ -26,7 +37,9 @@ func (us *UserService) CreateUser(profileName, email, loginName, loginPassword s
 	theUser := user.User{
 		ID:          newUserId,
 		ProfileName: profileName,
-		Email:       email,
+
+		Email:         email,
+		EmailVerified: false,
 
 		LoginName:         loginName,
 		LoginPasswordHash: passwordHash,
@@ -44,40 +57,28 @@ func (us *UserService) GetUser(id string) (user.User, error) {
 func (us *UserService) ChangePassword(userID, newPassword string) error {
 	log.Printf("call ChangePassword('%s', ..)\n", userID)
 
-	theUser, err := us.UserStorage.Get(userID)
-	if err != nil {
-		return err
-	}
-
-	theUser.LoginPasswordHash = us.Hasher.Hash(newPassword)
-
-	return us.UserStorage.Save(theUser)
+	return us.readModifyWrite(userID, func(user user.User) error {
+		user.LoginPasswordHash = us.Hasher.Hash(newPassword)
+		return nil
+	})
 }
 
 func (us *UserService) ChangeProfileName(userID, profileName string) error {
 	log.Printf("call ChangeProfileName('%s', '%s')\n", userID, profileName)
 
-	theUser, err := us.UserStorage.Get(userID)
-	if err != nil {
-		return err
-	}
-
-	theUser.ProfileName = profileName
-
-	return us.UserStorage.Save(theUser)
+	return us.readModifyWrite(userID, func(user user.User) error {
+		user.ProfileName = profileName
+		return nil
+	})
 }
 
 func (us *UserService) ChangeEmail(userID, email string) error {
 	log.Printf("call ChangeEmail('%s', '%s')\n", userID, email)
 
-	theUser, err := us.UserStorage.Get(userID)
-	if err != nil {
-		return err
-	}
-
-	theUser.Email = email
-
-	return us.UserStorage.Save(theUser)
+	return us.readModifyWrite(userID, func(user user.User) error {
+		user.Email = email
+		return nil
+	})
 }
 
 // Authenticate checks whether a user with the given login credentials exists.
@@ -89,6 +90,12 @@ func (us *UserService) Authenticate(loginName, loginPassword string) (string, er
 	theUser, err := us.UserStorage.FindByLoginName(loginName)
 	if err != nil {
 		return "", err
+	}
+
+	if us.AuthEmailMustBeVerified {
+		if !theUser.EmailVerified {
+			return "", UserEmailMustBeVerified
+		}
 	}
 
 	passwordMatch := us.Hasher.Verify(loginPassword, theUser.LoginPasswordHash)
@@ -105,4 +112,39 @@ func (us *UserService) Authenticate(loginName, loginPassword string) (string, er
 	}
 
 	return theUser.ID, nil
+}
+
+func (us *UserService) SetEmailVerified(userID string) error {
+	log.Printf("call SetEmailVerified('%s')\n", userID)
+
+	return us.readModifyWrite(userID, func(user user.User) error {
+		user.EmailVerified = true
+		return nil
+	})
+}
+
+func (us *UserService) CheckAndSetEmailVerified(userID, email string) error {
+	log.Printf("call CheckAndSetEmailVerified('%s', '%s')\n", userID, email)
+
+	return us.readModifyWrite(userID, func(user user.User) error {
+		if user.Email != email {
+			return InvalidVerificationEmail
+		}
+		user.EmailVerified = true
+		return nil
+	})
+}
+
+func (us *UserService) readModifyWrite(userID string, modifier func(user user.User) error) error {
+	user, err := us.UserStorage.Get(userID)
+	if err != nil {
+		return err
+	}
+
+	err = modifier(user)
+	if err != nil {
+		return err
+	}
+
+	return us.UserStorage.Save(user)
 }
