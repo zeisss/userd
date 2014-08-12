@@ -42,8 +42,12 @@ func (base *BaseHandler) writeProcessingError(resp http.ResponseWriter, err erro
 	log.Printf("Internal error: %v\n", err)
 }
 
-func (base *BaseHandler) writeBadRequest(resp http.ResponseWriter) {
+func (base *BaseHandler) writeBadRequest(resp http.ResponseWriter, message ...string) {
 	resp.WriteHeader(http.StatusBadRequest)
+
+	for _, msg := range message {
+		resp.Write([]byte(msg))
+	}
 }
 
 func (base *BaseHandler) UserID(req *http.Request) (string, bool) {
@@ -70,10 +74,14 @@ func (h *CreateUserHandler) ServeHTTP(resp http.ResponseWriter, req *http.Reques
 	userID, err := h.UserService.CreateUser(profileName, email, loginName, loginPassword)
 
 	if err != nil {
-		h.writeProcessingError(resp, err)
+		if service.IsEmailAlreadyTakenError(err) || service.IsLoginNameAlreadyTakenError(err) {
+			h.writeBadRequest(resp, err.Error())
+		} else {
+			h.writeProcessingError(resp, err)
+		}
 	} else {
 		resp.Header().Add("location", "/v1/user/get?id="+userID)
-		resp.WriteHeader(http.StatusOK)
+		resp.WriteHeader(http.StatusCreated)
 		resp.Write([]byte(userID))
 	}
 }

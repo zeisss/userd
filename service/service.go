@@ -4,6 +4,7 @@ import (
 	"../user"
 
 	"errors"
+	"log"
 )
 
 var (
@@ -17,6 +18,8 @@ type UserService struct {
 }
 
 func (us *UserService) CreateUser(profileName, email, loginName, loginPassword string) (string, error) {
+	log.Printf("call CreateUser('%s', '%s', ..)\n", profileName, email)
+
 	passwordHash := us.Hasher.Hash(loginPassword)
 	newUserId := us.IdFactory.NewUserID()
 
@@ -34,10 +37,13 @@ func (us *UserService) CreateUser(profileName, email, loginName, loginPassword s
 }
 
 func (us *UserService) GetUser(id string) (user.User, error) {
+	log.Printf("call GetUser('%s')\n", id)
 	return us.UserStorage.Get(id)
 }
 
 func (us *UserService) ChangePassword(userID, newPassword string) error {
+	log.Printf("call ChangePassword('%s', ..)\n", userID)
+
 	theUser, err := us.UserStorage.Get(userID)
 	if err != nil {
 		return err
@@ -49,6 +55,8 @@ func (us *UserService) ChangePassword(userID, newPassword string) error {
 }
 
 func (us *UserService) ChangeProfileName(userID, profileName string) error {
+	log.Printf("call ChangeProfileName('%s', '%s')\n", userID, profileName)
+
 	theUser, err := us.UserStorage.Get(userID)
 	if err != nil {
 		return err
@@ -60,6 +68,8 @@ func (us *UserService) ChangeProfileName(userID, profileName string) error {
 }
 
 func (us *UserService) ChangeEmail(userID, email string) error {
+	log.Printf("call ChangeEmail('%s', '%s')\n", userID, email)
+
 	theUser, err := us.UserStorage.Get(userID)
 	if err != nil {
 		return err
