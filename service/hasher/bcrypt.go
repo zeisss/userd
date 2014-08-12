@@ -25,29 +25,19 @@ func (bh *BcryptHasher) Hash(password string) string {
 	if err != nil {
 		panic(err)
 	}
-	return bh.serialize(byteHash)
+	return string(byteHash)
 }
 
 func (bh *BcryptHasher) Verify(password, hash string) bool {
-	byteHash := bh.unserialize(hash)
-
-	err := bcrypt.CompareHashAndPassword(byteHash, []byte(password))
+	err := bcrypt.CompareHashAndPassword([]byte(hash), []byte(password))
 	return err == nil
 }
 
 func (bh *BcryptHasher) NeedsRehash(hash string) bool {
-	hashCost, err := bcrypt.Cost(bh.unserialize(hash))
+	hashCost, err := bcrypt.Cost([]byte(hash))
 	if err != nil {
 		panic(err)
 	}
 
 	return (hashCost < bh.Cost)
-}
-
-func (bh *BcryptHasher) serialize(byteHash []byte) string {
-	return string(byteHash)
-}
-
-func (bh *BcryptHasher) unserialize(hash string) []byte {
-	return []byte(hash)
 }

@@ -5,6 +5,10 @@ import (
 	"testing"
 )
 
+const (
+	Password = "secret"
+)
+
 func ExampleApiCreateAndReadUser() {
 	userID, err := ApiCreateUser("CEO", "ceo@acme.com", "CEO", "secret-passphrase")
 	if err != nil {
@@ -40,6 +44,50 @@ func TestReadUser(t *testing.T) {
 	}
 }
 
+func TestAuth(t *testing.T) {
+	userResult := RunApiCreateAndVerifyUser(t, "TestAuth")
+
+	userId, err := ApiAuthenticate("TestAuth", Password)
+	if err != nil {
+		t.Fatalf("Failed to perform auth: %v", err)
+	}
+	if userId != userResult.userID {
+		t.Fatalf("Authentication succeeded, but wrong userid was received: %s instead of %s ", userId, userResult.userID)
+	}
+}
+
+func TestChangeProfileName(t *testing.T) {
+	userResult := RunApiCreateUser(t, "ChangeProfileName")
+
+	if err := ApiChangeProfileName(userResult.userID, "ChangeProfileNameChanged"); err != nil {
+		t.Fatalf("Failed to change profile name: %v", err)
+	}
+
+	user, err := ApiGetUser(userResult.userID)
+	if err != nil {
+		t.Fatalf("Failed to read user: %v", err)
+	}
+	if user.ProfileName != "ChangeProfileNameChanged" {
+		t.Fatalf("Profile Name was not changed!")
+	}
+}
+
+func TestChangeLoginCredentials(t *testing.T) {
+	userResult := RunApiCreateAndVerifyUser(t, "TestChangeLoginCredentials")
+
+	if err := ApiChangeLoginCredentials(userResult.userID, "TestChangeLoginCredentialsChanged", "new_secret"); err != nil {
+		t.Fatalf("Failed to change profile name: %v", err)
+	}
+
+	userID, err := ApiAuthenticate("TestChangeLoginCredentialsChanged", "new_secret")
+	if err != nil {
+		t.Fatalf("Failed to read user: %v", err)
+	}
+	if userID != userResult.userID {
+		t.Fatalf("Logged into the wrong user!")
+	}
+}
+
 // ----------------------------------------------------
 
 type ApiCreateUserResult struct {
@@ -47,7 +95,7 @@ type ApiCreateUserResult struct {
 }
 
 func RunApiCreateUser(t *testing.T, username string) ApiCreateUserResult {
-	userID, err := ApiCreateUser(username, username+"@moinz.de", username, "secret")
+	userID, err := ApiCreateUser(username, username+"@moinz.de", username, Password)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -56,4 +104,14 @@ func RunApiCreateUser(t *testing.T, username string) ApiCreateUserResult {
 	}
 
 	return ApiCreateUserResult{userID}
+}
+
+func RunApiCreateAndVerifyUser(t *testing.T, username string) ApiCreateUserResult {
+	user := RunApiCreateUser(t, username)
+
+	err := ApiVerifyEmail(user.userID)
+	if err != nil {
+		t.Fatalf("Failed to verify user %s: %v", user.userID, err)
+	}
+	return user
 }

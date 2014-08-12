@@ -47,7 +47,7 @@ func main() {
 	base := BaseHandler{&userService}
 	http.Handle("/v1/user/create", EnforeMethod("POST", &CreateUserHandler{base}))
 	http.Handle("/v1/user/get", EnforeMethod("GET", &GetUserHandler{base}))
-	http.Handle("/v1/user/change_password", EnforeMethod("POST", &ChangePasswordHandler{base}))
+	http.Handle("/v1/user/change_login_credentials", EnforeMethod("POST", &ChangeLoginCredentialsHandler{base}))
 	http.Handle("/v1/user/change_email", EnforeMethod("POST", &ChangeEmailHandler{base}))
 	http.Handle("/v1/user/change_profile_name", EnforeMethod("POST", &ChangeProfileNameHandler{base}))
 

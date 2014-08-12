@@ -54,10 +54,11 @@ func (us *UserService) GetUser(id string) (user.User, error) {
 	return us.UserStorage.Get(id)
 }
 
-func (us *UserService) ChangePassword(userID, newPassword string) error {
+func (us *UserService) ChangeLoginCredentials(userID, newLogin, newPassword string) error {
 	log.Printf("call ChangePassword('%s', ..)\n", userID)
 
-	return us.readModifyWrite(userID, func(user user.User) error {
+	return us.readModifyWrite(userID, func(user *user.User) error {
+		user.LoginName = newLogin
 		user.LoginPasswordHash = us.Hasher.Hash(newPassword)
 		return nil
 	})
@@ -66,7 +67,7 @@ func (us *UserService) ChangePassword(userID, newPassword string) error {
 func (us *UserService) ChangeProfileName(userID, profileName string) error {
 	log.Printf("call ChangeProfileName('%s', '%s')\n", userID, profileName)
 
-	return us.readModifyWrite(userID, func(user user.User) error {
+	return us.readModifyWrite(userID, func(user *user.User) error {
 		user.ProfileName = profileName
 		return nil
 	})
@@ -75,7 +76,7 @@ func (us *UserService) ChangeProfileName(userID, profileName string) error {
 func (us *UserService) ChangeEmail(userID, email string) error {
 	log.Printf("call ChangeEmail('%s', '%s')\n", userID, email)
 
-	return us.readModifyWrite(userID, func(user user.User) error {
+	return us.readModifyWrite(userID, func(user *user.User) error {
 		user.Email = email
 		return nil
 	})
@@ -87,6 +88,8 @@ func (us *UserService) ChangeEmail(userID, email string) error {
 // Error Helpers
 //
 func (us *UserService) Authenticate(loginName, loginPassword string) (string, error) {
+	log.Printf("call Authenticate('%s', ...)\n", loginName)
+
 	theUser, err := us.UserStorage.FindByLoginName(loginName)
 	if err != nil {
 		return "", err
@@ -117,7 +120,7 @@ func (us *UserService) Authenticate(loginName, loginPassword string) (string, er
 func (us *UserService) SetEmailVerified(userID string) error {
 	log.Printf("call SetEmailVerified('%s')\n", userID)
 
-	return us.readModifyWrite(userID, func(user user.User) error {
+	return us.readModifyWrite(userID, func(user *user.User) error {
 		user.EmailVerified = true
 		return nil
 	})
@@ -126,7 +129,7 @@ func (us *UserService) SetEmailVerified(userID string) error {
 func (us *UserService) CheckAndSetEmailVerified(userID, email string) error {
 	log.Printf("call CheckAndSetEmailVerified('%s', '%s')\n", userID, email)
 
-	return us.readModifyWrite(userID, func(user user.User) error {
+	return us.readModifyWrite(userID, func(user *user.User) error {
 		if user.Email != email {
 			return InvalidVerificationEmail
 		}
@@ -135,16 +138,20 @@ func (us *UserService) CheckAndSetEmailVerified(userID, email string) error {
 	})
 }
 
-func (us *UserService) readModifyWrite(userID string, modifier func(user user.User) error) error {
+func (us *UserService) readModifyWrite(userID string, modifier func(user *user.User) error) error {
 	user, err := us.UserStorage.Get(userID)
 	if err != nil {
 		return err
 	}
 
-	err = modifier(user)
+	// log.Printf("READ %v\n", user)
+
+	err = modifier(&user)
 	if err != nil {
 		return err
 	}
+
+	// log.Printf("WRITE %v\n", user)
 
 	return us.UserStorage.Save(user)
 }

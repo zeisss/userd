@@ -125,12 +125,18 @@ func (h *GetUserHandler) writeUser(resp http.ResponseWriter, theUser *user.User)
 
 /// ----------------------------------------------
 
-type ChangePasswordHandler struct{ BaseHandler }
+type ChangeLoginCredentialsHandler struct{ BaseHandler }
 
-func (h *ChangePasswordHandler) ServeHTTP(resp http.ResponseWriter, req *http.Request) {
+func (h *ChangeLoginCredentialsHandler) ServeHTTP(resp http.ResponseWriter, req *http.Request) {
 	userID, ok := h.UserID(req)
 	if !ok {
 		h.writeBadRequest(resp)
+		return
+	}
+
+	newLogin := req.FormValue("name")
+	if newLogin == "" {
+		h.writeBadRequest(resp, "Parameter 'name' is required.")
 		return
 	}
 
@@ -140,7 +146,7 @@ func (h *ChangePasswordHandler) ServeHTTP(resp http.ResponseWriter, req *http.Re
 		return
 	}
 
-	if err := h.UserService.ChangePassword(userID, newPassword); err != nil {
+	if err := h.UserService.ChangeLoginCredentials(userID, newLogin, newPassword); err != nil {
 		h.writeProcessingError(resp, err)
 	} else {
 		resp.WriteHeader(http.StatusNoContent)
@@ -209,6 +215,7 @@ func (h *AuthenticationHandler) ServeHTTP(resp http.ResponseWriter, req *http.Re
 	}
 
 	userID, err := h.UserService.Authenticate(loginName, loginPassword)
+	log.Printf("auth %v %v\n", userID, err)
 	if err != nil {
 		if service.IsNotFoundError(err) {
 			h.writeNotFoundError(resp)
