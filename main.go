@@ -13,6 +13,11 @@ import (
 var (
 	listenAddress = flag.String("listen", "localhost:8080", "The address to listen on.")
 
+	// SSL
+	httpsUse             = flag.Bool("https-enable", false, "Enable HTTPS listening in favor of HTTP.")
+	httpsCertificateFile = flag.String("https-certificate", "server.cert", "The certificate to use for SSL.")
+	httpsKeyFile         = flag.String("https-key", "server.key", "The keyfile to use for SSL.")
+
 	// Service/Logic
 	authEmail = flag.Bool("auth-email", true, "Must the email adress be verified for an authentication to succeed.")
 
@@ -55,7 +60,14 @@ func main() {
 
 	http.Handle("/v1/user/verify_email", EnforeMethod("POST", &VerifyEmailHandler{base}))
 
-	if err := http.ListenAndServe(*listenAddress, nil); err != nil {
-		panic(err)
+	if *httpsUse {
+		if err := http.ListenAndServeTLS(*listenAddress, *httpsCertificateFile, *httpsKeyFile, nil); err != nil {
+			panic(err)
+		}
+	} else {
+		if err := http.ListenAndServe(*listenAddress, nil); err != nil {
+			panic(err)
+		}
 	}
+
 }
