@@ -96,6 +96,8 @@ func (c JsonCall) ResponseOK(resp *http.Response) (interface{}, error) {
 	return c.Target, nil
 }
 
+// ------------------------
+
 type BodyReader struct{}
 
 func (c BodyReader) ResponseOK(resp *http.Response) (interface{}, error) {
@@ -209,3 +211,5 @@ func (call ChangeLoginCredentialsCall) PostForm() url.Values {
 func (call ChangeLoginCredentialsCall) ResponseNoContent(resp *http.Response) (interface{}, error) {
 	return nil, nil
 }
+
+// ------------------------

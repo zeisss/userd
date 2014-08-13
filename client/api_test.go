@@ -28,11 +28,11 @@ func ExampleApiCreateAndReadUser() {
 	// Email: ceo@acme.com
 }
 
-func TestApiCreateUser(t *testing.T) {
+func TestIntegrationApiCreateUser__SuiteAll(t *testing.T) {
 	RunApiCreateUser(t, "CreateUserTest")
 }
 
-func TestReadUser(t *testing.T) {
+func TestIntegrationReadUser__SuiteAll(t *testing.T) {
 	userResult := RunApiCreateUser(t, "ReadUserTest")
 
 	user, err := ApiGetUser(userResult.userID)
@@ -44,7 +44,7 @@ func TestReadUser(t *testing.T) {
 	}
 }
 
-func TestAuth(t *testing.T) {
+func TestIntegrationAuth__SuiteAll(t *testing.T) {
 	userResult := RunApiCreateAndVerifyUser(t, "TestAuth")
 
 	userId, err := ApiAuthenticate("TestAuth", Password)
@@ -56,7 +56,7 @@ func TestAuth(t *testing.T) {
 	}
 }
 
-func TestChangeProfileName(t *testing.T) {
+func TestIntegrationChangeProfileName__SuiteAll(t *testing.T) {
 	userResult := RunApiCreateUser(t, "ChangeProfileName")
 
 	if err := ApiChangeProfileName(userResult.userID, "ChangeProfileNameChanged"); err != nil {
@@ -72,7 +72,7 @@ func TestChangeProfileName(t *testing.T) {
 	}
 }
 
-func TestChangeLoginCredentials(t *testing.T) {
+func TestIntegrationChangeLoginCredentials__SuiteAll(t *testing.T) {
 	userResult := RunApiCreateAndVerifyUser(t, "TestChangeLoginCredentials")
 
 	if err := ApiChangeLoginCredentials(userResult.userID, "TestChangeLoginCredentialsChanged", "new_secret"); err != nil {
@@ -85,6 +85,30 @@ func TestChangeLoginCredentials(t *testing.T) {
 	}
 	if userID != userResult.userID {
 		t.Fatalf("Logged into the wrong user!")
+	}
+}
+
+func TestIntegrationAuthSucceedsUnverified__SuiteAuthEmailFalse(t *testing.T) {
+	userResult := RunApiCreateUser(t, "AuthFailsUnauthenticated")
+
+	userID, err := ApiAuthenticate("AuthFailsUnauthenticated", Password)
+	if err != nil {
+		t.Fatalf("Failed to auth: %v", err)
+	}
+	if userID != userResult.userID {
+		t.Fatalf("Authenticated as wrong user, got '%s', expected '%s'", userID, userResult.userID)
+	}
+}
+
+func TestIntegrationAuthFailsUnverified__SuiteAuthEmailTrue(t *testing.T) {
+	_ = RunApiCreateUser(t, "AuthFailsUnauthenticated")
+
+	_, err := ApiAuthenticate("AuthFailsUnauthenticated", Password)
+	if err == nil {
+		t.Fatalf("Expected email-not-verified error, got nil")
+	}
+	if err.Error() != "Email must be verified to authenticate." {
+		t.Fatalf("Expected 'Email must be verified to authenticate.', got '%s'", err.Error())
 	}
 }
 

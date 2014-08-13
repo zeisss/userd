@@ -3,7 +3,7 @@ OUTPUT=userd
 SOURCE := $(shell find . -name '*.go')
 GOPATH := $(shell pwd)
 
-.PHONY=all clean
+.PHONY=all clean run-tests
 
 all: $(OUTPUT)
 
@@ -16,3 +16,6 @@ $(OUTPUT): src $(SOURCE)
 src:
 	GOPATH=$(GOPATH) go get -d .
 
+
+run-tests: $(OUTPUT)
+	./bin/run-tests.sh

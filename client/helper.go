@@ -7,23 +7,30 @@ import (
 	"net/url"
 )
 
+// Call describes an object to be passed into Execute() to define the input and output handling to perform an action on a resource via HTTP.
+// To actually trigger behavior, the call struct should implement some of the other interfaces in this package.
 type Call interface {
 }
 
+// QueryParams can be implemented to provide URL parameters.
 type QueryParams interface {
 	QueryParams() url.Values
 }
 
+// PostForm can be implemented to perform a POST with the returned stream.
 type PostForm interface {
 	// Body returns the content-type and stream for the POST body to for this call.
 	Body() (string, io.Reader)
 }
 
+// PostCallForm can be implemented to perform a POST with a classic form-encoded body.
 type PostCallForm interface {
 	PostForm() url.Values
 }
 
 // ----------------------------------------
+
+// OKHandler can be implemented to handle the 200 OK case.
 type OKHandler interface {
 	ResponseOK(resp *http.Response) (interface{}, error)
 }
