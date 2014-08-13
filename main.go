@@ -2,16 +2,21 @@ package main
 
 import (
 	"./service"
+	"./service/events"
 	"./service/hasher"
 	"./service/idfactory"
 	"./service/storage"
 
 	"flag"
 	"net/http"
+	"os"
 )
 
 var (
 	listenAddress = flag.String("listen", "localhost:8080", "The address to listen on.")
+
+	// Backend Switchs
+	backendEventLog = flag.String("eventlog", "none", "Should events be logger? log or none")
 
 	// SSL
 	httpsUse             = flag.Bool("https-enable", false, "Enable HTTPS listening in favor of HTTP.")
@@ -23,6 +28,10 @@ var (
 
 	// Backends
 	hasherBcryptCost = flag.Int("hasher-bcrypt-cost", hasher.BcryptDefaultCost, "The cost to apply when hashing new passwords.")
+
+	// EventLog
+	eventLogFile = flag.String("event-log-file", "-", "Where to write the eventlog. - for stdout")
+	eventLogMode = flag.Uint("event-log-mode", 0700, "Mode to create logfile with - defaults to 0700")
 )
 
 func UserStorage() service.UserStorage {
@@ -37,15 +46,35 @@ func PasswordHasher() service.PasswordHasher {
 	return hasher.NewBcryptHasher(*hasherBcryptCost)
 }
 
+func EventLog() service.EventLog {
+	switch *backendEventLog {
+	case "log":
+		var err error
+		out := os.Stdout
+		if *eventLogFile != "-" {
+			out, err = os.OpenFile(*eventLogFile, os.O_WRONLY, os.FileMode(*eventLogMode))
+			if err != nil {
+				panic(err)
+			}
+		}
+		return events.NewLogStreamEventLog(out)
+	case "none":
+		return events.NewNoneEventLog()
+	default:
+		panic("Unknown -eventlog value: " + *backendEventLog)
+	}
+}
+
 func main() {
 	flag.Parse()
 
 	idFactory := IdFactory()
 	hasher := PasswordHasher()
 	userStorage := UserStorage()
+	eventLog := EventLog()
 
 	userService := service.UserService{
-		service.Dependencies{idFactory, hasher, userStorage},
+		service.Dependencies{idFactory, hasher, userStorage, eventLog},
 		service.Config{*authEmail},
 	}
 

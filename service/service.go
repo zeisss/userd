@@ -3,6 +3,7 @@ package service
 import (
 	"../user"
 
+	"encoding/json"
 	"errors"
 	"log"
 )
@@ -17,6 +18,7 @@ type Dependencies struct {
 	IdFactory   IdFactory
 	Hasher      PasswordHasher
 	UserStorage UserStorage
+	EventLog    EventLog
 }
 
 type Config struct {
@@ -32,10 +34,10 @@ func (us *UserService) CreateUser(profileName, email, loginName, loginPassword s
 	log.Printf("call CreateUser('%s', '%s', ..)\n", profileName, email)
 
 	passwordHash := us.Hasher.Hash(loginPassword)
-	newUserId := us.IdFactory.NewUserID()
+	newUserID := us.IdFactory.NewUserID()
 
 	theUser := user.User{
-		ID:          newUserId,
+		ID:          newUserID,
 		ProfileName: profileName,
 
 		Email:         email,
@@ -46,7 +48,17 @@ func (us *UserService) CreateUser(profileName, email, loginName, loginPassword s
 	}
 
 	err := us.UserStorage.Save(theUser)
-	return newUserId, err
+
+	if err != nil {
+		return "", err
+	}
+
+	us.logEvent("user.created", struct {
+		UserID      string `json:"user_id"`
+		ProfileName string `json:"profile_name"`
+	}{newUserID, profileName})
+
+	return newUserID, nil
 }
 
 func (us *UserService) GetUser(id string) (user.User, error) {
@@ -61,6 +73,10 @@ func (us *UserService) ChangeLoginCredentials(userID, newLogin, newPassword stri
 		user.LoginName = newLogin
 		user.LoginPasswordHash = us.Hasher.Hash(newPassword)
 		return nil
+	}, func(user *user.User) {
+		us.logEvent("user.change_login_credentials", struct {
+			UserID string `json:"user_id"`
+		}{userID})
 	})
 }
 
@@ -70,6 +86,11 @@ func (us *UserService) ChangeProfileName(userID, profileName string) error {
 	return us.readModifyWrite(userID, func(user *user.User) error {
 		user.ProfileName = profileName
 		return nil
+	}, func(user *user.User) {
+		us.logEvent("user.change_profile_name", struct {
+			UserID      string `json:"user_id"`
+			ProfileName string `json:"profile_name"`
+		}{userID, profileName})
 	})
 }
 
@@ -79,6 +100,11 @@ func (us *UserService) ChangeEmail(userID, email string) error {
 	return us.readModifyWrite(userID, func(user *user.User) error {
 		user.Email = email
 		return nil
+	}, func(user *user.User) {
+		us.logEvent("user.change_email", struct {
+			UserID string `json:"user_id"`
+			Email  string `json:"email"`
+		}{userID, email})
 	})
 }
 
@@ -114,6 +140,10 @@ func (us *UserService) Authenticate(loginName, loginPassword string) (string, er
 		us.UserStorage.Save(theUser)
 	}
 
+	us.logEvent("user.authenticated", struct {
+		UserID string `json:"user_id"`
+	}{userID})
+
 	return theUser.ID, nil
 }
 
@@ -123,6 +153,11 @@ func (us *UserService) SetEmailVerified(userID string) error {
 	return us.readModifyWrite(userID, func(user *user.User) error {
 		user.EmailVerified = true
 		return nil
+	}, func(user *user.User) {
+		us.logEvent("user.email_verified", struct {
+			UserID string `json:"user_id"`
+			Email  string `json:"email"`
+		}{userID, email})
 	})
 }
 
@@ -135,10 +170,17 @@ func (us *UserService) CheckAndSetEmailVerified(userID, email string) error {
 		}
 		user.EmailVerified = true
 		return nil
+	}, func(user *user.User) {
+		us.logEvent("user.email_verified", struct {
+			UserID string `json:"user_id"`
+			Email  string `json:"email"`
+		}{userID, email})
 	})
 }
 
-func (us *UserService) readModifyWrite(userID string, modifier func(user *user.User) error) error {
+// readModifyWrite reads the user with the given userID, applies modifier to it, saves the result
+// and calls all success function if no error occured.
+func (us *UserService) readModifyWrite(userID string, modifier func(user *user.User) error, success ...func(user *user.User)) error {
 	user, err := us.UserStorage.Get(userID)
 	if err != nil {
 		return err
@@ -153,5 +195,22 @@ func (us *UserService) readModifyWrite(userID string, modifier func(user *user.U
 
 	// log.Printf("WRITE %v\n", user)
 
-	return us.UserStorage.Save(user)
+	err = us.UserStorage.Save(user)
+	if err != nil {
+		return err
+	}
+
+	for _, f := range success {
+		f()
+	}
+}
+
+// logEvent serializes the entry with `encoding/json` and writes it to the us.EventLog
+func (us *UserService) logEvent(tag string, entry interface{}) {
+	data, err := json.Marshal(entry)
+	if err != nil {
+		// Our own data structs should always be jsonizable - if not we have a bug
+		panic(err)
+	}
+	us.EventLog.Log(tag, data)
 }
