@@ -215,7 +215,6 @@ func (h *AuthenticationHandler) ServeHTTP(resp http.ResponseWriter, req *http.Re
 	}
 
 	userID, err := h.UserService.Authenticate(loginName, loginPassword)
-	log.Printf("auth %v %v\n", userID, err)
 	if err != nil {
 		if service.IsNotFoundError(err) {
 			h.writeNotFoundError(resp)

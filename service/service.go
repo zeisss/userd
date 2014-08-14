@@ -142,7 +142,7 @@ func (us *UserService) Authenticate(loginName, loginPassword string) (string, er
 
 	us.logEvent("user.authenticated", struct {
 		UserID string `json:"user_id"`
-	}{userID})
+	}{theUser.ID})
 
 	return theUser.ID, nil
 }
@@ -157,7 +157,7 @@ func (us *UserService) SetEmailVerified(userID string) error {
 		us.logEvent("user.email_verified", struct {
 			UserID string `json:"user_id"`
 			Email  string `json:"email"`
-		}{userID, email})
+		}{userID, user.Email})
 	})
 }
 
@@ -201,8 +201,9 @@ func (us *UserService) readModifyWrite(userID string, modifier func(user *user.U
 	}
 
 	for _, f := range success {
-		f()
+		f(&user)
 	}
+	return nil
 }
 
 // logEvent serializes the entry with `encoding/json` and writes it to the us.EventLog
