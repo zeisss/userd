@@ -7,6 +7,8 @@ import (
 	"./service/idfactory"
 	"./service/storage"
 
+	recorder "./http"
+
 	"flag"
 	"net/http"
 	"os"
@@ -14,8 +16,9 @@ import (
 
 var (
 	// Service/Logic
-	listenAddress = flag.String("listen", "localhost:8080", "The address to listen on.")
-	authEmail     = flag.Bool("auth-email", true, "Must the email adress be verified for an authentication to succeed.")
+	listenAddress  = flag.String("listen", "localhost:8080", "The address to listen on.")
+	authEmail      = flag.Bool("auth-email", true, "Must the email adress be verified for an authentication to succeed.")
+	wrapLogHandler = flag.Bool("log-requests", false, "Should requests be logged to stdout")
 
 	// Frontend - HTTP
 	httpsUse             = flag.Bool("https-enable", false, "Enable HTTPS listening in favor of HTTP.")
@@ -70,17 +73,25 @@ func EventLog() service.EventLog {
 	}
 }
 
+func DefaultHandlers(handler http.Handler) http.Handler {
+	if *wrapLogHandler {
+		handler = &recorder.RequestLogger{handler}
+	}
+
+	return handler
+}
+
 func StartHttpInterface(userService *service.UserService) {
 	base := BaseHandler{userService}
-	http.Handle("/v1/user/create", EnforeMethod("POST", &CreateUserHandler{base}))
-	http.Handle("/v1/user/get", EnforeMethod("GET", &GetUserHandler{base}))
-	http.Handle("/v1/user/change_login_credentials", EnforeMethod("POST", &ChangeLoginCredentialsHandler{base}))
-	http.Handle("/v1/user/change_email", EnforeMethod("POST", &ChangeEmailHandler{base}))
-	http.Handle("/v1/user/change_profile_name", EnforeMethod("POST", &ChangeProfileNameHandler{base}))
+	http.Handle("/v1/user/create", DefaultHandlers(EnforeMethod("POST", &CreateUserHandler{base})))
+	http.Handle("/v1/user/get", DefaultHandlers(EnforeMethod("GET", &GetUserHandler{base})))
+	http.Handle("/v1/user/change_login_credentials", DefaultHandlers(EnforeMethod("POST", &ChangeLoginCredentialsHandler{base})))
+	http.Handle("/v1/user/change_email", DefaultHandlers(EnforeMethod("POST", &ChangeEmailHandler{base})))
+	http.Handle("/v1/user/change_profile_name", DefaultHandlers(EnforeMethod("POST", &ChangeProfileNameHandler{base})))
 
-	http.Handle("/v1/user/authenticate", EnforeMethod("POST", &AuthenticationHandler{base}))
+	http.Handle("/v1/user/authenticate", DefaultHandlers(EnforeMethod("POST", &AuthenticationHandler{base})))
 
-	http.Handle("/v1/user/verify_email", EnforeMethod("POST", &VerifyEmailHandler{base}))
+	http.Handle("/v1/user/verify_email", DefaultHandlers(EnforeMethod("POST", &VerifyEmailHandler{base})))
 
 	if *httpsUse {
 		if err := http.ListenAndServeTLS(*listenAddress, *httpsCertificateFile, *httpsKeyFile, nil); err != nil {

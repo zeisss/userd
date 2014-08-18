@@ -9,6 +9,8 @@ import (
 	"net/http"
 )
 
+// --------------------------------------------------------------------------------------------
+
 type HTTPMethodCheckWrapper struct {
 	AllowedMethod string
 	Next          http.Handler
@@ -27,6 +29,8 @@ func (h *HTTPMethodCheckWrapper) ServeHTTP(resp http.ResponseWriter, req *http.R
 		h.Next.ServeHTTP(resp, req)
 	}
 }
+
+// --------------------------------------------------------------------------------------------
 
 type BaseHandler struct {
 	UserService *service.UserService
@@ -58,7 +62,7 @@ func (base *BaseHandler) UserID(req *http.Request) (string, bool) {
 	return userID, true
 }
 
-// ------------------------------------------
+// --------------------------------------------------------------------------------------------
 
 type CreateUserHandler struct {
 	BaseHandler
@@ -147,7 +151,11 @@ func (h *ChangeLoginCredentialsHandler) ServeHTTP(resp http.ResponseWriter, req 
 	}
 
 	if err := h.UserService.ChangeLoginCredentials(userID, newLogin, newPassword); err != nil {
-		h.writeProcessingError(resp, err)
+		if service.IsNotFoundError(err) {
+			h.writeNotFoundError(resp)
+		} else {
+			h.writeProcessingError(resp, err)
+		}
 	} else {
 		resp.WriteHeader(http.StatusNoContent)
 	}
@@ -171,7 +179,11 @@ func (h *ChangeProfileNameHandler) ServeHTTP(resp http.ResponseWriter, req *http
 	}
 
 	if err := h.UserService.ChangeProfileName(userID, newProfileName); err != nil {
-		h.writeProcessingError(resp, err)
+		if service.IsNotFoundError(err) {
+			h.writeNotFoundError(resp)
+		} else {
+			h.writeProcessingError(resp, err)
+		}
 	} else {
 		resp.WriteHeader(http.StatusNoContent)
 	}
@@ -195,7 +207,11 @@ func (h *ChangeEmailHandler) ServeHTTP(resp http.ResponseWriter, req *http.Reque
 	}
 
 	if err := h.UserService.ChangeEmail(userID, newEmail); err != nil {
-		h.writeProcessingError(resp, err)
+		if service.IsNotFoundError(err) {
+			h.writeNotFoundError(resp)
+		} else {
+			h.writeProcessingError(resp, err)
+		}
 	} else {
 		resp.WriteHeader(http.StatusNoContent)
 	}
