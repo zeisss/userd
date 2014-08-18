@@ -1,12 +1,12 @@
 User Service
 ============
 
-Microservice to create/read/update users and organize them into groups. Supports email verification and password resets.
+Microservice to create/read/update and authenticate users.
 
 ## Email Verification
 
 When creating a new user, the email is considered 'unverified'. Based on the `--auth-email` command line arguments,
-this might be required for authentication. To verify an email, a separate call to `/verify_email` is needed.
+this might be required for authentication to work. To verify an email, a separate call to `/verify_email` is needed.
 
 ## Password Encryption
 
@@ -54,10 +54,13 @@ gets verified - maybe the user changed the email after the original verification
 
 ### POST /v1/user/change_email?id={userid}&email={email}
 
+Updates the email of the user identified by `userid`.
+
 ### POST /v1/user/change_profile_name?id={userid}&profile_name={name}
 
-### POST /v1/user/change_password?id={userid}&password={password}
+### POST /v1/user/change_login_credentials?id={userid}&name={name}&password={password}
 
+Updates the credentials to be used with `/authenticate`.
 
 ### POST /v1/user/authenticate?name={login_name}&password={login_password}
 
