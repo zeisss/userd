@@ -73,32 +73,22 @@ func EventLog() service.EventLog {
 	}
 }
 
-func DefaultHandlers(handler http.Handler) http.Handler {
+func WrapHandlers(handler http.Handler) http.Handler {
 	if *wrapLogHandler {
 		handler = &httputil.RequestLogger{handler}
 	}
 
 	return handler
 }
-
 func StartHttpInterface(userService *service.UserService) {
-	base := BaseHandler{userService}
-	http.Handle("/v1/user/create", DefaultHandlers(httputil.EnforeMethod("POST", &CreateUserHandler{base})))
-	http.Handle("/v1/user/get", DefaultHandlers(httputil.EnforeMethod("GET", &GetUserHandler{base})))
-	http.Handle("/v1/user/change_login_credentials", DefaultHandlers(httputil.EnforeMethod("POST", &ChangeLoginCredentialsHandler{base})))
-	http.Handle("/v1/user/change_email", DefaultHandlers(httputil.EnforeMethod("POST", &ChangeEmailHandler{base})))
-	http.Handle("/v1/user/change_profile_name", DefaultHandlers(httputil.EnforeMethod("POST", &ChangeProfileNameHandler{base})))
-
-	http.Handle("/v1/user/authenticate", DefaultHandlers(httputil.EnforeMethod("POST", &AuthenticationHandler{base})))
-
-	http.Handle("/v1/user/verify_email", DefaultHandlers(httputil.EnforeMethod("POST", &VerifyEmailHandler{base})))
+	handler := NewUserAPIHandler(userService, WrapHandlers)
 
 	if *httpsUse {
-		if err := http.ListenAndServeTLS(*listenAddress, *httpsCertificateFile, *httpsKeyFile, nil); err != nil {
+		if err := http.ListenAndServeTLS(*listenAddress, *httpsCertificateFile, *httpsKeyFile, handler); err != nil {
 			panic(err)
 		}
 	} else {
-		if err := http.ListenAndServe(*listenAddress, nil); err != nil {
+		if err := http.ListenAndServe(*listenAddress, handler); err != nil {
 			panic(err)
 		}
 	}

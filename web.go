@@ -4,10 +4,29 @@ import (
 	"./service"
 	"./user"
 
+	httputil "./http"
+
 	"encoding/json"
 	"log"
 	"net/http"
 )
+
+func NewUserAPIHandler(userService *service.UserService, decorator func(http.Handler) http.Handler) http.Handler {
+	base := BaseHandler{userService}
+
+	mux := http.NewServeMux()
+	mux.Handle("/v1/user/create", decorator(httputil.EnforeMethod("POST", &CreateUserHandler{base})))
+	mux.Handle("/v1/user/get", decorator(httputil.EnforeMethod("GET", &GetUserHandler{base})))
+	mux.Handle("/v1/user/change_login_credentials", decorator(httputil.EnforeMethod("POST", &ChangeLoginCredentialsHandler{base})))
+	mux.Handle("/v1/user/change_email", decorator(httputil.EnforeMethod("POST", &ChangeEmailHandler{base})))
+	mux.Handle("/v1/user/change_profile_name", decorator(httputil.EnforeMethod("POST", &ChangeProfileNameHandler{base})))
+
+	mux.Handle("/v1/user/authenticate", decorator(httputil.EnforeMethod("POST", &AuthenticationHandler{base})))
+
+	mux.Handle("/v1/user/verify_email", decorator(httputil.EnforeMethod("POST", &VerifyEmailHandler{base})))
+
+	return mux
+}
 
 // --------------------------------------------------------------------------------------------
 
@@ -41,6 +60,20 @@ func (base *BaseHandler) UserID(req *http.Request) (string, bool) {
 	return userID, true
 }
 
+func (base *BaseHandler) handleProcessingError(resp http.ResponseWriter, req *http.Request, err error) {
+	if service.IsNotFoundError(err) {
+		base.writeNotFoundError(resp)
+	} else if service.IsEmailAlreadyTakenError(err) || service.IsLoginNameAlreadyTakenError(err) {
+		base.writeBadRequest(resp, err.Error())
+	} else if err == service.InvalidCredentials {
+		base.writeBadRequest(resp)
+	} else if service.IsUserEmailMustBeVerifiedError(err) {
+		base.writeBadRequest(resp, err.Error())
+	} else {
+		base.writeProcessingError(resp, err)
+	}
+}
+
 // --------------------------------------------------------------------------------------------
 
 type CreateUserHandler struct {
@@ -57,11 +90,7 @@ func (h *CreateUserHandler) ServeHTTP(resp http.ResponseWriter, req *http.Reques
 	userID, err := h.UserService.CreateUser(profileName, email, loginName, loginPassword)
 
 	if err != nil {
-		if service.IsEmailAlreadyTakenError(err) || service.IsLoginNameAlreadyTakenError(err) {
-			h.writeBadRequest(resp, err.Error())
-		} else {
-			h.writeProcessingError(resp, err)
-		}
+		h.handleProcessingError(resp, req, err)
 	} else {
 		resp.Header().Add("location", "/v1/user/get?id="+userID)
 		resp.WriteHeader(http.StatusCreated)
@@ -84,11 +113,7 @@ func (h *GetUserHandler) ServeHTTP(resp http.ResponseWriter, req *http.Request) 
 
 	user, err := h.UserService.GetUser(userId)
 	if err != nil {
-		if service.IsNotFoundError(err) {
-			h.writeNotFoundError(resp)
-		} else {
-			h.writeProcessingError(resp, err)
-		}
+		h.handleProcessingError(resp, req, err)
 	} else {
 		if err := h.writeUser(resp, &user); err != nil {
 			panic(err)
@@ -130,11 +155,7 @@ func (h *ChangeLoginCredentialsHandler) ServeHTTP(resp http.ResponseWriter, req 
 	}
 
 	if err := h.UserService.ChangeLoginCredentials(userID, newLogin, newPassword); err != nil {
-		if service.IsNotFoundError(err) {
-			h.writeNotFoundError(resp)
-		} else {
-			h.writeProcessingError(resp, err)
-		}
+		h.handleProcessingError(resp, req, err)
 	} else {
 		resp.WriteHeader(http.StatusNoContent)
 	}
@@ -158,11 +179,7 @@ func (h *ChangeProfileNameHandler) ServeHTTP(resp http.ResponseWriter, req *http
 	}
 
 	if err := h.UserService.ChangeProfileName(userID, newProfileName); err != nil {
-		if service.IsNotFoundError(err) {
-			h.writeNotFoundError(resp)
-		} else {
-			h.writeProcessingError(resp, err)
-		}
+		h.handleProcessingError(resp, req, err)
 	} else {
 		resp.WriteHeader(http.StatusNoContent)
 	}
@@ -186,11 +203,7 @@ func (h *ChangeEmailHandler) ServeHTTP(resp http.ResponseWriter, req *http.Reque
 	}
 
 	if err := h.UserService.ChangeEmail(userID, newEmail); err != nil {
-		if service.IsNotFoundError(err) {
-			h.writeNotFoundError(resp)
-		} else {
-			h.writeProcessingError(resp, err)
-		}
+		h.handleProcessingError(resp, req, err)
 	} else {
 		resp.WriteHeader(http.StatusNoContent)
 	}
@@ -211,15 +224,7 @@ func (h *AuthenticationHandler) ServeHTTP(resp http.ResponseWriter, req *http.Re
 
 	userID, err := h.UserService.Authenticate(loginName, loginPassword)
 	if err != nil {
-		if service.IsNotFoundError(err) {
-			h.writeNotFoundError(resp)
-		} else if err == service.InvalidCredentials {
-			h.writeBadRequest(resp)
-		} else if service.IsUserEmailMustBeVerifiedError(err) {
-			h.writeBadRequest(resp, err.Error())
-		} else {
-			h.writeProcessingError(resp, err)
-		}
+		h.handleProcessingError(resp, req, err)
 	} else {
 		resp.WriteHeader(http.StatusOK)
 		resp.Write([]byte(userID))
@@ -247,11 +252,7 @@ func (h *VerifyEmailHandler) ServeHTTP(resp http.ResponseWriter, req *http.Reque
 	}
 
 	if err != nil {
-		if service.IsNotFoundError(err) {
-			h.writeNotFoundError(resp)
-		} else {
-			h.writeProcessingError(resp, err)
-		}
+		h.handleProcessingError(resp, req, err)
 	} else {
 		resp.WriteHeader(http.StatusNoContent)
 	}
