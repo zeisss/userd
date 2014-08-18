@@ -11,19 +11,19 @@ import (
 	"net/http"
 )
 
-func NewUserAPIHandler(userService *service.UserService, decorator func(http.Handler) http.Handler) http.Handler {
+func NewUserAPIHandler(userService *service.UserService) http.Handler {
 	base := BaseHandler{userService}
 
 	mux := http.NewServeMux()
-	mux.Handle("/v1/user/create", decorator(httputil.EnforeMethod("POST", &CreateUserHandler{base})))
-	mux.Handle("/v1/user/get", decorator(httputil.EnforeMethod("GET", &GetUserHandler{base})))
-	mux.Handle("/v1/user/change_login_credentials", decorator(httputil.EnforeMethod("POST", &ChangeLoginCredentialsHandler{base})))
-	mux.Handle("/v1/user/change_email", decorator(httputil.EnforeMethod("POST", &ChangeEmailHandler{base})))
-	mux.Handle("/v1/user/change_profile_name", decorator(httputil.EnforeMethod("POST", &ChangeProfileNameHandler{base})))
+	mux.Handle("/v1/user/create", httputil.EnforeMethod("POST", &CreateUserHandler{base}))
+	mux.Handle("/v1/user/get", httputil.EnforeMethod("GET", &GetUserHandler{base}))
+	mux.Handle("/v1/user/change_login_credentials", httputil.EnforeMethod("POST", &ChangeLoginCredentialsHandler{base}))
+	mux.Handle("/v1/user/change_email", httputil.EnforeMethod("POST", &ChangeEmailHandler{base}))
+	mux.Handle("/v1/user/change_profile_name", httputil.EnforeMethod("POST", &ChangeProfileNameHandler{base}))
 
-	mux.Handle("/v1/user/authenticate", decorator(httputil.EnforeMethod("POST", &AuthenticationHandler{base})))
+	mux.Handle("/v1/user/authenticate", httputil.EnforeMethod("POST", &AuthenticationHandler{base}))
 
-	mux.Handle("/v1/user/verify_email", decorator(httputil.EnforeMethod("POST", &VerifyEmailHandler{base})))
+	mux.Handle("/v1/user/verify_email", httputil.EnforeMethod("POST", &VerifyEmailHandler{base}))
 
 	return mux
 }

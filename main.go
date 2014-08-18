@@ -73,15 +73,11 @@ func EventLog() service.EventLog {
 	}
 }
 
-func WrapHandlers(handler http.Handler) http.Handler {
+func StartHttpInterface(userService *service.UserService) {
+	handler := NewUserAPIHandler(userService)
 	if *wrapLogHandler {
 		handler = &httputil.RequestLogger{handler}
 	}
-
-	return handler
-}
-func StartHttpInterface(userService *service.UserService) {
-	handler := NewUserAPIHandler(userService, WrapHandlers)
 
 	if *httpsUse {
 		if err := http.ListenAndServeTLS(*listenAddress, *httpsCertificateFile, *httpsKeyFile, handler); err != nil {

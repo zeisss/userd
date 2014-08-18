@@ -38,7 +38,7 @@ function run_suites() {
 }
 
 LOG_FILE=/tmp/userd-test.log
-DEFAULT_ARGS=${DEFAULT_ARGS:}
+DEFAULT_ARGS=${DEFAULT_ARGS:-}
 
 cleanup
 run_suites
