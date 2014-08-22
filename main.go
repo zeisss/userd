@@ -12,6 +12,7 @@ import (
 	"flag"
 	"net/http"
 	"os"
+	"time"
 )
 
 var (
@@ -27,6 +28,7 @@ var (
 
 	// Backend Switches
 	backendEventLog = flag.String("eventlog", "none", "Should events be logger? log or none")
+	backendStorage  = flag.String("storage", "memory", "Data storage: memory or redis")
 
 	// Backend - Hasher
 	hasherBcryptCost = flag.Int("hasher-bcrypt-cost", hasher.BcryptDefaultCost, "The cost to apply when hashing new passwords.")
@@ -38,10 +40,31 @@ var (
 
 	/// Cores
 	eventCoresUrl = flag.String("event-cores-url", "amqp://guest:guest@localhost", "An amqp url to connect to.")
+
+	// Backend - Storage
+	/// Redis
+	storageRedisAddress   = flag.String("storage-redis-address", ":6379", "The redis address to connect to host.")
+	storageRedisMaxIdle   = flag.Int("storage-redis-max-idle", 3, "Maximum number of idle connections in the pool.")
+	storageRedisMaxActive = flag.Int("storage-redis-max-active", 20, "Maximum number of active connections in the pool.")
+	storageRedisTimeout   = flag.Int("storage-redis-pool-timeout", 240, "Seconds to keep idle connections in the pool.")
+	storageRedisPassword  = flag.String("storage-redis-password", "", "A password to use for authorization.")
 )
 
 func UserStorage() service.UserStorage {
-	return storage.NewLocalStorage()
+	switch *backendStorage {
+	case "redis":
+		return storage.NewRedisStorage(
+			*storageRedisAddress,
+			*storageRedisMaxIdle,
+			*storageRedisMaxActive,
+			time.Duration(*storageRedisTimeout)*time.Second,
+			*storageRedisPassword,
+		)
+	case "memory":
+		return storage.NewLocalStorage()
+	default:
+		panic("Unknown --storage value: " + *backendStorage)
+	}
 }
 
 func IdFactory() service.IdFactory {

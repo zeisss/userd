@@ -1,144 +1,83 @@
 package storage
 
 import (
-	"../../user"
-
-	"errors"
 	"sync"
 )
 
-var (
-	InvalidUserObject = errors.New("Invalid user object")
-	UserNotFound      = errors.New("No user found.")
+// -------------------------------------------------
 
-	LoginNameAlreadyTaken = errors.New("The given loginName is already taken.")
-	EmailAlreadyTaken     = errors.New("The given email address is already taken.")
-)
-
-func NewLocalStorage() *localStorage {
-	return &localStorage{
+func NewLocalStorage() *keyValueStorage {
+	return newKeyValueStorage(&localStorageDriver{
 		// Lock
 		Lock: &sync.Mutex{},
 
 		// Table
-		Users: make(map[string]user.User),
-
-		// Index
-		LoginNames: NewIndex(),
-		Emails:     NewIndex(),
-	}
+		Users: make(map[string]string),
+	})
 }
 
-type localStorage struct {
+type localStorageDriver struct {
 	Lock *sync.Mutex
 
-	// Map{userID => user}
-	Users map[string]user.User
-
-	// Map{loginName => userID}
-	LoginNames *Index
-
-	// Map{email => userID}
-	Emails *Index
+	// Map{userID => userJson}
+	Users map[string]string
 }
 
-func (s *localStorage) Save(user user.User) error {
-	if user.ID == "" || user.Email == "" || user.LoginName == "" {
-		return InvalidUserObject
-	}
-
+func (s *localStorageDriver) Set(userID, userJson string) error {
 	s.Lock.Lock()
 	defer s.Lock.Unlock()
 
-	// Unique Index Validation
-	if s.checkTakenByOtherUser(s.Emails, user.Email, user.ID) {
-		return EmailAlreadyTaken
-	}
-
-	if s.checkTakenByOtherUser(s.LoginNames, user.LoginName, user.ID) {
-		return LoginNameAlreadyTaken
-	}
-
-	// Write
-	oldUser, err := s.noLockLookup(user.ID)
-	if err != nil && err != UserNotFound {
-		return err
-	}
-
-	if oldUser.Email != user.Email {
-		s.Emails.Remove(oldUser.Email)
-	}
-
-	if oldUser.LoginName != user.LoginName {
-		s.LoginNames.Remove(oldUser.LoginName)
-	}
-
-	s.Emails.Put(user.Email, user.ID)
-	s.LoginNames.Put(user.LoginName, user.ID)
-	s.Users[user.ID] = user
-
+	s.Users[userID] = userJson
 	return nil
 }
 
-func (s *localStorage) checkTakenByOtherUser(index *Index, key, userID string) bool {
-	otherUserID, taken := index.Lookup(key)
-	if taken && otherUserID != userID {
-		return true
-	}
-	return false
-}
-
-func (s *localStorage) Get(userID string) (user.User, error) {
-	if userID == "" {
-		panic("Invalid parameter: userID is empty.")
-	}
-
+func (s *localStorageDriver) Lookup(userID string) (string, bool, error) {
 	s.Lock.Lock()
 	defer s.Lock.Unlock()
 
-	return s.noLockLookup(userID)
+	userJson, ok := s.Users[userID]
+	return userJson, ok, nil
 }
 
-func (s *localStorage) FindByLoginName(loginName string) (user.User, error) {
-	s.Lock.Lock()
-	defer s.Lock.Unlock()
-
-	userID, ok := s.LoginNames.Lookup(loginName)
-	if !ok {
-		return user.User{}, UserNotFound
-	}
-	return s.noLockLookup(userID)
-}
-
-func (s *localStorage) noLockLookup(userID string) (user.User, error) {
-	user, ok := s.Users[userID]
-	if !ok {
-		return user, UserNotFound
-	} else {
-		return user, nil
-	}
+func (s *localStorageDriver) Index(name string) keyValueIndex {
+	return NewIndex()
 }
 
 // -------------------------------------------------
 
 func NewIndex() *Index {
-	return &Index{make(map[string]string)}
+	return &Index{
+		&sync.Mutex{},
+		make(map[string]string),
+	}
 }
 
 // Index is a helper struct
 type Index struct {
+	Lock *sync.Mutex
 	Data map[string]string
 }
 
-func (i *Index) Put(key, value string) {
+func (i *Index) Put(key, value string) error {
+	i.Lock.Lock()
+	defer i.Lock.Unlock()
+
 	i.Data[key] = value
+	return nil
 }
 
-func (i *Index) Remove(key string) {
+func (i *Index) Remove(key string) error {
+	i.Lock.Lock()
+	defer i.Lock.Unlock()
+
 	delete(i.Data, key)
+	return nil
 }
 
-func (i *Index) Lookup(key string) (string, bool) {
+func (i *Index) Lookup(key string) (string, bool, error) {
+	i.Lock.Lock()
+	defer i.Lock.Unlock()
+
 	value, ok := i.Data[key]
-	return value, ok
+	return value, ok, nil
 }
