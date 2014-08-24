@@ -7,28 +7,20 @@ import (
 	"./service/idfactory"
 	"./service/storage"
 
-	httputil "./http"
+	httpcli "./http/cli"
 
 	"flag"
-	"net/http"
 	"os"
 	"time"
 )
 
 var (
 	// Service/Logic
-	listenAddress  = flag.String("listen", "localhost:8080", "The address to listen on.")
-	authEmail      = flag.Bool("auth-email", true, "Must the email adress be verified for an authentication to succeed.")
-	wrapLogHandler = flag.Bool("log-requests", false, "Should requests be logged to stdout")
-
-	// Frontend - HTTP
-	httpsUse             = flag.Bool("https-enable", false, "Enable HTTPS listening in favor of HTTP.")
-	httpsCertificateFile = flag.String("https-certificate", "server.cert", "The certificate to use for SSL.")
-	httpsKeyFile         = flag.String("https-key", "server.key", "The keyfile to use for SSL.")
+	authEmail = flag.Bool("auth-email", true, "Must the email adress be verified for an authentication to succeed.")
 
 	// Backend Switches
 	backendEventLog = flag.String("eventlog", "none", "Should events be logger? log or none")
-	backendStorage  = flag.String("storage", "memory", "Data storage: memory or redis")
+	backendStorage  = flag.String("storage", "memory", "Data storage: memory or etcd")
 
 	// Backend - Hasher
 	hasherBcryptCost = flag.Int("hasher-bcrypt-cost", hasher.BcryptDefaultCost, "The cost to apply when hashing new passwords.")
@@ -36,12 +28,17 @@ var (
 	// Backend - EventLog
 	/// Log
 	eventLogFile = flag.String("event-log-file", "-", "Where to write the eventlog. - for stdout.")
-	eventLogMode = flag.Uint("event-log-mode", 0700, "Mode to create logfile with - defaults to 0700.")
+	eventLogMode = flag.Uint("event-log-mode", 0600, "Mode to create logfile with - defaults to 0600.")
 
 	/// Cores
 	eventCoresUrl = flag.String("event-cores-url", "amqp://guest:guest@localhost", "An amqp url to connect to.")
 
 	// Backend - Storage
+	/// Etcd
+	storageEtcdPeer   = flag.String("storage-etcd-peer", "http://localhost:4001/", "The peer to connect to.")
+	storageEtcdPrefix = flag.String("storage-etcd-prefix", "moinz.de/userd", "The path prefix to use with Etcd.")
+	storageEtcdTtl    = flag.Uint64("storage-etcd-ttl", 365*24*60*60, "The TTL to use when creating entries in Etcd.")
+
 	/// Redis
 	storageRedisAddress   = flag.String("storage-redis-address", ":6379", "The redis address to connect to host.")
 	storageRedisMaxIdle   = flag.Int("storage-redis-max-idle", 3, "Maximum number of idle connections in the pool.")
@@ -60,6 +57,8 @@ func UserStorage() service.UserStorage {
 			time.Duration(*storageRedisTimeout)*time.Second,
 			*storageRedisPassword,
 		)
+	case "etcd":
+		return storage.NewEtcdStorage(*storageEtcdPeer, *storageEtcdPrefix, *storageEtcdTtl)
 	case "memory":
 		return storage.NewLocalStorage()
 	default:
@@ -96,23 +95,6 @@ func EventLog() service.EventLog {
 	}
 }
 
-func StartHttpInterface(userService *service.UserService) {
-	handler := NewUserAPIHandler(userService)
-	if *wrapLogHandler {
-		handler = &httputil.RequestLogger{handler}
-	}
-
-	if *httpsUse {
-		if err := http.ListenAndServeTLS(*listenAddress, *httpsCertificateFile, *httpsKeyFile, handler); err != nil {
-			panic(err)
-		}
-	} else {
-		if err := http.ListenAndServe(*listenAddress, handler); err != nil {
-			panic(err)
-		}
-	}
-}
-
 func main() {
 	flag.Parse()
 
@@ -126,5 +108,6 @@ func main() {
 		service.Config{*authEmail},
 	}
 
-	StartHttpInterface(&userService)
+	handler := NewUserAPIHandler(&userService)
+	httpcli.StartHttpInterface(handler)
 }
