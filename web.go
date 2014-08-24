@@ -6,7 +6,6 @@ import (
 
 	httputil "./http"
 
-	"encoding/json"
 	"log"
 	"net/http"
 )
@@ -34,22 +33,10 @@ type BaseHandler struct {
 	UserService *service.UserService
 }
 
-func (base *BaseHandler) writeNotFoundError(resp http.ResponseWriter) {
-	resp.WriteHeader(http.StatusNotFound)
-}
-
 func (base *BaseHandler) writeProcessingError(resp http.ResponseWriter, err error) {
 	resp.WriteHeader(http.StatusInternalServerError)
 
 	log.Printf("Internal error: %v\n", err)
-}
-
-func (base *BaseHandler) writeBadRequest(resp http.ResponseWriter, message ...string) {
-	resp.WriteHeader(http.StatusBadRequest)
-
-	for _, msg := range message {
-		resp.Write([]byte(msg))
-	}
 }
 
 func (base *BaseHandler) UserID(req *http.Request) (string, bool) {
@@ -62,13 +49,13 @@ func (base *BaseHandler) UserID(req *http.Request) (string, bool) {
 
 func (base *BaseHandler) handleProcessingError(resp http.ResponseWriter, req *http.Request, err error) {
 	if service.IsNotFoundError(err) {
-		base.writeNotFoundError(resp)
+		httputil.WriteNotFound(resp)
 	} else if service.IsEmailAlreadyTakenError(err) || service.IsLoginNameAlreadyTakenError(err) {
-		base.writeBadRequest(resp, err.Error())
+		httputil.WriteBadRequest(resp, req, err.Error())
 	} else if err == service.InvalidCredentials {
-		base.writeBadRequest(resp)
+		httputil.WriteBadRequest(resp, req)
 	} else if service.IsUserEmailMustBeVerifiedError(err) {
-		base.writeBadRequest(resp, err.Error())
+		httputil.WriteBadRequest(resp, req, err.Error())
 	} else {
 		base.writeProcessingError(resp, err)
 	}
@@ -107,7 +94,7 @@ type GetUserHandler struct {
 func (h *GetUserHandler) ServeHTTP(resp http.ResponseWriter, req *http.Request) {
 	userId, ok := h.UserID(req)
 	if !ok {
-		h.writeBadRequest(resp)
+		httputil.WriteBadRequest(resp, req)
 		return
 	}
 
@@ -115,20 +102,18 @@ func (h *GetUserHandler) ServeHTTP(resp http.ResponseWriter, req *http.Request) 
 	if err != nil {
 		h.handleProcessingError(resp, req, err)
 	} else {
-		if err := h.writeUser(resp, &user); err != nil {
-			panic(err)
-		}
+		h.writeUser(resp, &user)
 	}
 }
 
-func (h *GetUserHandler) writeUser(resp http.ResponseWriter, theUser *user.User) error {
+func (h *GetUserHandler) writeUser(resp http.ResponseWriter, theUser *user.User) {
 	result := map[string]interface{}{}
 	result["profile_name"] = theUser.ProfileName
 	result["email"] = theUser.Email
 	result["login_name"] = theUser.LoginName
 	result["email_verified"] = theUser.EmailVerified
 
-	return json.NewEncoder(resp).Encode(result)
+	httputil.WriteJSONResponse(resp, http.StatusOK, result)
 }
 
 /// ----------------------------------------------
@@ -138,19 +123,19 @@ type ChangeLoginCredentialsHandler struct{ BaseHandler }
 func (h *ChangeLoginCredentialsHandler) ServeHTTP(resp http.ResponseWriter, req *http.Request) {
 	userID, ok := h.UserID(req)
 	if !ok {
-		h.writeBadRequest(resp)
+		httputil.WriteBadRequest(resp, req)
 		return
 	}
 
 	newLogin := req.FormValue("name")
 	if newLogin == "" {
-		h.writeBadRequest(resp, "Parameter 'name' is required.")
+		httputil.WriteBadRequest(resp, req, "Parameter 'name' is required.")
 		return
 	}
 
 	newPassword := req.FormValue("password")
 	if newPassword == "" {
-		h.writeBadRequest(resp)
+		httputil.WriteBadRequest(resp, req)
 		return
 	}
 
@@ -168,20 +153,20 @@ type ChangeProfileNameHandler struct{ BaseHandler }
 func (h *ChangeProfileNameHandler) ServeHTTP(resp http.ResponseWriter, req *http.Request) {
 	userID, ok := h.UserID(req)
 	if !ok {
-		h.writeBadRequest(resp)
+		httputil.WriteBadRequest(resp, req)
 		return
 	}
 
 	newProfileName := req.FormValue("profile_name")
 	if newProfileName == "" {
-		h.writeBadRequest(resp)
+		httputil.WriteBadRequest(resp, req)
 		return
 	}
 
 	if err := h.UserService.ChangeProfileName(userID, newProfileName); err != nil {
 		h.handleProcessingError(resp, req, err)
 	} else {
-		resp.WriteHeader(http.StatusNoContent)
+		httputil.WriteNoContent(resp)
 	}
 }
 
@@ -192,13 +177,13 @@ type ChangeEmailHandler struct{ BaseHandler }
 func (h *ChangeEmailHandler) ServeHTTP(resp http.ResponseWriter, req *http.Request) {
 	userID, ok := h.UserID(req)
 	if !ok {
-		h.writeBadRequest(resp)
+		httputil.WriteBadRequest(resp, req)
 		return
 	}
 
 	newEmail := req.FormValue("email")
 	if newEmail == "" {
-		h.writeBadRequest(resp)
+		httputil.WriteBadRequest(resp, req)
 		return
 	}
 
@@ -218,7 +203,7 @@ func (h *AuthenticationHandler) ServeHTTP(resp http.ResponseWriter, req *http.Re
 	loginPassword := req.PostFormValue("password")
 
 	if loginName == "" || loginPassword == "" {
-		h.writeBadRequest(resp)
+		httputil.WriteBadRequest(resp, req)
 		return
 	}
 
@@ -238,7 +223,7 @@ type VerifyEmailHandler struct{ BaseHandler }
 func (h *VerifyEmailHandler) ServeHTTP(resp http.ResponseWriter, req *http.Request) {
 	userID, ok := h.UserID(req)
 	if !ok {
-		h.writeBadRequest(resp, "No id parameter given.")
+		httputil.WriteBadRequest(resp, req, "No id parameter given.")
 		return
 	}
 
@@ -264,4 +249,17 @@ func (h *VerifyEmailHandler) Email(req *http.Request) (string, bool) {
 		return "", false
 	}
 	return email[0], true
+}
+
+// --------------------------------------------------------------------------------------------
+
+type WelcomeHandler struct{ BaseHandler }
+
+func (h *WelcomeHandler) ServeHTTP(resp http.ResponseWriter, req *http.Request) {
+	result := struct {
+		Message string `json:"message"`
+	}{
+		"Welcome! This is userd.",
+	}
+	httputil.WriteJSONResponse(resp, http.StatusOK, result)
 }

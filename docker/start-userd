@@ -1,0 +1,12 @@
+#!/bin/bash
+
+OPTS="-listen=0.0.0.0:8080"
+
+# If a REDIS backend is detected, activate all kinds of redis backends
+if [ ! -z "$REDIS_PORT" ]; then
+	echo "Using redis storage with address=$REDIS_PORT"
+	OPTS="$OPTS -redis-address=$REDIS_PORT"
+	OPTS="$OPTS -storage=redis"
+fi
+
+exec /opt/userd $OPTS $*

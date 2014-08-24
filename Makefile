@@ -1,5 +1,7 @@
 OUTPUT=userd
 
+DOCKER_IMAGE=zeisss/aah-userd
+
 SOURCE := $(shell find . -name '*.go')
 GOPATH := $(shell pwd)
 
@@ -19,3 +21,9 @@ src:
 
 run-tests: $(OUTPUT)
 	./bin/run-tests.sh
+
+
+docker-image: src $(SOURCE)
+	GOOS=linux GOPATH=$(GOPATH) go build -o docker/$(OUTPUT) .
+
+	docker build -t $(DOCKER_IMAGE) docker/
