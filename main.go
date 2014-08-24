@@ -13,15 +13,11 @@ import (
 	"os"
 )
 
-var (
-	// Service/Logic
-	authEmail = flag.Bool("auth-email", true, "Must the email adress be verified for an authentication to succeed.")
+// ------------------------------------------------------------------------------
 
+var (
 	// Backend Switches
 	backendStorage = flag.String("storage", "memory", "Data storage: memory or etcd")
-
-	// Backend - Hasher
-	hasherBcryptCost = flag.Int("hasher-bcrypt-cost", hasher.BcryptDefaultCost, "The cost to apply when hashing new passwords.")
 
 	// Backend - Storage
 	/// Etcd
@@ -43,15 +39,38 @@ func UserStorage() service.UserStorage {
 	}
 }
 
+// ------------------------------------------------------------------------------
+
+var (
+	switchFactory = flag.String("idfactory", "uuid", "How to generate new IDs.")
+
+	factorySeqFormat = flag.String("idfactory-seq-format", "user-%d", "The format when creating new IDs.")
+)
+
 func IdFactory() service.IdFactory {
-	return &idfactory.UUIDFactory{}
+	switch *switchFactory {
+	case "uuid":
+		return &idfactory.UUIDFactory{}
+	case "seq":
+		return idfactory.NewSequenceFactory(*factorySeqFormat)
+	default:
+		panic("Unknown -idfactory value: " + *switchFactory)
+	}
+
 }
+
+// ------------------------------------------------------------------------------
+
+var (
+	hasherBcryptCost = flag.Int("hasher-bcrypt-cost", hasher.BcryptDefaultCost, "The cost to apply when hashing new passwords.")
+)
 
 func PasswordHasher() service.PasswordHasher {
 	return hasher.NewBcryptHasher(*hasherBcryptCost)
 }
 
 // ------------------------------------------------------------------------------
+
 var (
 	switchEventStream = flag.String("eventstream", "none", "Should events be logger? log or none")
 
@@ -80,17 +99,19 @@ func EventStream() service.EventStream {
 	}
 }
 
+// ------------------------------------------------------------------------------
+
+var (
+	authEmail = flag.Bool("auth-email", true, "Must the email adress be verified for an authentication to succeed.")
+)
+
 func main() {
 	flag.Parse()
 
-	idFactory := IdFactory()
-	hasher := PasswordHasher()
-	userStorage := UserStorage()
+	dependencies := service.Dependencies{IdFactory(), PasswordHasher(), UserStorage(), EventStream()}
+	config := service.Config{*authEmail}
 
-	userService := service.UserService{
-		service.Dependencies{idFactory, hasher, userStorage, EventStream()},
-		service.Config{*authEmail},
-	}
+	userService := service.UserService{dependencies, config}
 
 	handler := NewUserAPIHandler(&userService)
 	httpcli.StartHttpInterface(handler)
