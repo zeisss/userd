@@ -17,7 +17,7 @@ import (
 
 var (
 	// Backend Switches
-	backendStorage = flag.String("storage", "memory", "Data storage: memory or etcd")
+	backendStorage = flag.String("storage", "memory", "Data storage: memory, redis or etcd")
 
 	// Backend - Storage
 	/// Etcd
@@ -42,7 +42,7 @@ func UserStorage() service.UserStorage {
 // ------------------------------------------------------------------------------
 
 var (
-	switchFactory = flag.String("idfactory", "uuid", "How to generate new IDs.")
+	switchFactory = flag.String("idfactory", "uuid", "How to generate new IDs. uuid or seq")
 
 	factorySeqFormat = flag.String("idfactory-seq-format", "user-%d", "The format when creating new IDs.")
 )
@@ -72,7 +72,7 @@ func PasswordHasher() service.PasswordHasher {
 // ------------------------------------------------------------------------------
 
 var (
-	switchEventStream = flag.String("eventstream", "none", "Should events be logger? log or none")
+	switchEventStream = flag.String("eventstream", "none", "Should events be logged? Use log, cores, redis or none")
 
 	eventstreamRedisPrefix = flag.String("eventstream-redis-prefix", "", "A prefix to include into the queue/channel name")
 	eventstreamRedisPubSub = flag.Bool("eventstream-redis-pubsub", false, "Use PUBLISH instead of RPUSH to send the message")
