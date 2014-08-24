@@ -18,7 +18,7 @@ type Dependencies struct {
 	IdFactory   IdFactory
 	Hasher      PasswordHasher
 	UserStorage UserStorage
-	EventLog    EventLog
+	EventStream EventStream
 }
 
 type Config struct {
@@ -213,5 +213,5 @@ func (us *UserService) logEvent(tag string, entry interface{}) {
 		// Our own data structs should always be jsonizable - if not we have a bug
 		panic(err)
 	}
-	us.EventLog.Log(tag, data)
+	us.EventStream.Publish(tag, data)
 }

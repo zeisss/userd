@@ -1,4 +1,4 @@
-package events
+package eventstream
 
 func NewNoneEventLog() *noneEventLog {
 	return &noneEventLog{}
@@ -7,6 +7,6 @@ func NewNoneEventLog() *noneEventLog {
 type noneEventLog struct {
 }
 
-func (log *noneEventLog) Log(tag string, data []byte) {
+func (log *noneEventLog) Publish(tag string, data []byte) {
 
 }

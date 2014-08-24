@@ -2,7 +2,7 @@ package main
 
 import (
 	"./service"
-	"./service/events"
+	"./service/eventstream"
 	"./service/hasher"
 	"./service/idfactory"
 	"./service/storage"
@@ -11,7 +11,6 @@ import (
 
 	"flag"
 	"os"
-	"time"
 )
 
 var (
@@ -19,44 +18,22 @@ var (
 	authEmail = flag.Bool("auth-email", true, "Must the email adress be verified for an authentication to succeed.")
 
 	// Backend Switches
-	backendEventLog = flag.String("eventlog", "none", "Should events be logger? log or none")
-	backendStorage  = flag.String("storage", "memory", "Data storage: memory or etcd")
+	backendStorage = flag.String("storage", "memory", "Data storage: memory or etcd")
 
 	// Backend - Hasher
 	hasherBcryptCost = flag.Int("hasher-bcrypt-cost", hasher.BcryptDefaultCost, "The cost to apply when hashing new passwords.")
-
-	// Backend - EventLog
-	/// Log
-	eventLogFile = flag.String("event-log-file", "-", "Where to write the eventlog. - for stdout.")
-	eventLogMode = flag.Uint("event-log-mode", 0600, "Mode to create logfile with - defaults to 0600.")
-
-	/// Cores
-	eventCoresUrl = flag.String("event-cores-url", "amqp://guest:guest@localhost", "An amqp url to connect to.")
 
 	// Backend - Storage
 	/// Etcd
 	storageEtcdPeer   = flag.String("storage-etcd-peer", "http://localhost:4001/", "The peer to connect to.")
 	storageEtcdPrefix = flag.String("storage-etcd-prefix", "moinz.de/userd", "The path prefix to use with Etcd.")
 	storageEtcdTtl    = flag.Uint64("storage-etcd-ttl", 365*24*60*60, "The TTL to use when creating entries in Etcd.")
-
-	/// Redis
-	storageRedisAddress   = flag.String("storage-redis-address", ":6379", "The redis address to connect to host.")
-	storageRedisMaxIdle   = flag.Int("storage-redis-max-idle", 3, "Maximum number of idle connections in the pool.")
-	storageRedisMaxActive = flag.Int("storage-redis-max-active", 20, "Maximum number of active connections in the pool.")
-	storageRedisTimeout   = flag.Int("storage-redis-pool-timeout", 240, "Seconds to keep idle connections in the pool.")
-	storageRedisPassword  = flag.String("storage-redis-password", "", "A password to use for authorization.")
 )
 
 func UserStorage() service.UserStorage {
 	switch *backendStorage {
 	case "redis":
-		return storage.NewRedisStorage(
-			*storageRedisAddress,
-			*storageRedisMaxIdle,
-			*storageRedisMaxActive,
-			time.Duration(*storageRedisTimeout)*time.Second,
-			*storageRedisPassword,
-		)
+		return storage.NewRedisStorage(RedisPool())
 	case "etcd":
 		return storage.NewEtcdStorage(*storageEtcdPeer, *storageEtcdPrefix, *storageEtcdTtl)
 	case "memory":
@@ -74,24 +51,32 @@ func PasswordHasher() service.PasswordHasher {
 	return hasher.NewBcryptHasher(*hasherBcryptCost)
 }
 
-func EventLog() service.EventLog {
-	switch *backendEventLog {
+// ------------------------------------------------------------------------------
+var (
+	switchEventStream = flag.String("eventstream", "none", "Should events be logger? log or none")
+
+	eventstreamRedisPrefix = flag.String("eventstream-redis-prefix", "", "A prefix to include into the queue/channel name")
+	eventstreamRedisPubSub = flag.Bool("eventstream-redis-pubsub", false, "Use PUBLISH instead of RPUSH to send the message")
+
+	eventstreamLogFile = flag.String("eventstream-log-file", "-", "Where to write the eventlog. - for stdout.")
+	eventstreamLogMode = flag.Uint("eventstream-log-mode", 0600, "Mode to create logfile with - defaults to 0600.")
+
+	eventstreamCoresUrl    = flag.String("eventstream-cores-url", "amqp://guest:guest@localhost", "An amqp url to connect to.")
+	eventstreamCoresPrefix = flag.String("eventstream-cores-prefix", "", "A prefix to include into the routing key")
+)
+
+func EventStream() service.EventStream {
+	switch *switchEventStream {
+	case "redis":
+		return eventstream.NewRedisEventStream(RedisPool(), *eventstreamRedisPrefix, *eventstreamRedisPubSub)
 	case "cores":
-		return events.NewCoresAmqpEventLog(*eventCoresUrl)
+		return eventstream.NewCoresAmqpEventLog(*eventstreamCoresUrl, *eventstreamCoresPrefix)
 	case "log":
-		var err error
-		out := os.Stdout
-		if *eventLogFile != "-" {
-			out, err = os.OpenFile(*eventLogFile, os.O_WRONLY, os.FileMode(*eventLogMode))
-			if err != nil {
-				panic(err)
-			}
-		}
-		return events.NewLogStreamEventLog(out)
+		return eventstream.NewFileLogEventStream(*eventstreamLogFile, os.FileMode(*eventstreamLogMode))
 	case "none":
-		return events.NewNoneEventLog()
+		return eventstream.NewNoneEventLog()
 	default:
-		panic("Unknown -eventlog value: " + *backendEventLog)
+		panic("Unknown -eventstream value: " + *switchEventStream)
 	}
 }
 
@@ -101,10 +86,9 @@ func main() {
 	idFactory := IdFactory()
 	hasher := PasswordHasher()
 	userStorage := UserStorage()
-	eventLog := EventLog()
 
 	userService := service.UserService{
-		service.Dependencies{idFactory, hasher, userStorage, eventLog},
+		service.Dependencies{idFactory, hasher, userStorage, EventStream()},
 		service.Config{*authEmail},
 	}
 

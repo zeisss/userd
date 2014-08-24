@@ -25,7 +25,7 @@ type UserStorage interface {
 // EventLog abstracts any eventlog for store the business events of the UserService.
 // Could write to RabbitMQ, Apache Kafka or just plain files.
 // This is a write-only interface, errors are propagted to stderr or similar..
-type EventLog interface {
+type EventStream interface {
 	// Log forwards the given entry to the eventlog.
-	Log(tag string, entry []byte)
+	Publish(tag string, entry []byte)
 }

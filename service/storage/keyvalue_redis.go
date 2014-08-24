@@ -3,8 +3,6 @@ package storage
 import (
 	"github.com/garyburd/redigo/redis"
 	"github.com/juju/errgo"
-
-	"time"
 )
 
 type redisKeyValueDriver struct {
@@ -12,27 +10,7 @@ type redisKeyValueDriver struct {
 	Users *redisIndex
 }
 
-func NewRedisStorage(address string, maxIdle, maxActive int, timeout time.Duration, password string) *keyValueStorage {
-	pool := &redis.Pool{
-		Dial: func() (redis.Conn, error) {
-			c, err := redis.Dial("tcp", address)
-			if err != nil {
-				return nil, err
-			}
-
-			if password != "" {
-				if _, err := c.Do("AUTH", password); err != nil {
-					c.Close()
-					return nil, err
-				}
-			}
-			return c, err
-		},
-		MaxIdle:     maxIdle,
-		MaxActive:   maxActive,
-		IdleTimeout: timeout,
-	}
-
+func NewRedisStorage(pool *redis.Pool) *keyValueStorage {
 	return newKeyValueStorage(&redisKeyValueDriver{
 		Pool: pool,
 		Users: &redisIndex{pool, func(key string) string {
