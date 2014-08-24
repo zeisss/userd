@@ -1,6 +1,6 @@
 OUTPUT=userd
 
-DOCKER_IMAGE=zeisss/aah-userd
+DOCKER_IMAGE=zeisss/userd
 
 SOURCE := $(shell find . -name '*.go')
 GOPATH := $(shell pwd)

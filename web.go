@@ -24,6 +24,8 @@ func NewUserAPIHandler(userService *service.UserService) http.Handler {
 
 	mux.Handle("/v1/user/verify_email", httputil.EnforeMethod("POST", &VerifyEmailHandler{base}))
 
+	mux.Handle("/", &WelcomeHandler{base})
+
 	return mux
 }
 
