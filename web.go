@@ -2,7 +2,7 @@ package main
 
 import (
 	"./service"
-	"./user"
+	"./service/user"
 
 	httputil "./http"
 

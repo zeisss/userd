@@ -1,7 +1,7 @@
 package storage
 
 import (
-	"../../user"
+	"../user"
 
 	"github.com/juju/errgo"
 

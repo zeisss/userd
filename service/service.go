@@ -1,7 +1,7 @@
 package service
 
 import (
-	"../user"
+	"./user"
 
 	"encoding/json"
 	"errors"

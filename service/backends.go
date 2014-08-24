@@ -1,7 +1,7 @@
 package service
 
 import (
-	"../user"
+	"./user"
 )
 
 type IdFactory interface {
