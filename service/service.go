@@ -70,7 +70,7 @@ func (us *UserService) GetUser(id string) (user.User, error) {
 }
 
 func (us *UserService) ChangeLoginCredentials(userID, newLogin, newPassword string) error {
-	log.Printf("call ChangePassword('%s', ..)\n", userID)
+	log.Printf("call ChangeLoginCredentials('%s', ..)\n", userID)
 
 	return us.readModifyWrite(userID, func(user *user.User) error {
 		user.LoginName = newLogin
