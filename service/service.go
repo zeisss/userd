@@ -3,17 +3,8 @@ package service
 import (
 	"./user"
 
-	"github.com/juju/errgo"
-
 	"encoding/json"
-	"errors"
 	"log"
-)
-
-var (
-	InvalidCredentials       = errors.New("Invalid credentials.")
-	InvalidVerificationEmail = errors.New("Email adress does not match current email for user.")
-	UserEmailMustBeVerified  = errors.New("Email must be verified to authenticate.")
 )
 
 type Dependencies struct {
@@ -33,6 +24,9 @@ type UserService struct {
 }
 
 func (us *UserService) CreateUser(profileName, email, loginName, loginPassword string) (string, error) {
+	if profileName == "" || email == "" || loginName == "" || loginPassword == "" {
+		return "", InvalidArguments
+	}
 	log.Printf("call CreateUser('%s', '%s', ..)\n", profileName, email)
 
 	passwordHash := us.Hasher.Hash(loginPassword)
@@ -52,7 +46,7 @@ func (us *UserService) CreateUser(profileName, email, loginName, loginPassword s
 	err := us.UserStorage.Save(theUser)
 
 	if err != nil {
-		return "", errgo.Mask(err)
+		return "", Mask(err)
 	}
 
 	us.logEvent("user.created", struct {
@@ -66,10 +60,13 @@ func (us *UserService) CreateUser(profileName, email, loginName, loginPassword s
 func (us *UserService) GetUser(id string) (user.User, error) {
 	log.Printf("call GetUser('%s')\n", id)
 	user, err := us.UserStorage.Get(id)
-	return user, errgo.Mask(err)
+	return user, Mask(err)
 }
 
 func (us *UserService) ChangeLoginCredentials(userID, newLogin, newPassword string) error {
+	if userID == "" || newLogin == "" || newPassword == "" {
+		return InvalidArguments
+	}
 	log.Printf("call ChangeLoginCredentials('%s', ..)\n", userID)
 
 	return us.readModifyWrite(userID, func(user *user.User) error {
@@ -84,6 +81,9 @@ func (us *UserService) ChangeLoginCredentials(userID, newLogin, newPassword stri
 }
 
 func (us *UserService) ChangeProfileName(userID, profileName string) error {
+	if userID == "" || profileName == "" {
+		return InvalidArguments
+	}
 	log.Printf("call ChangeProfileName('%s', '%s')\n", userID, profileName)
 
 	return us.readModifyWrite(userID, func(user *user.User) error {
@@ -98,6 +98,9 @@ func (us *UserService) ChangeProfileName(userID, profileName string) error {
 }
 
 func (us *UserService) ChangeEmail(userID, email string) error {
+	if userID == "" || email == "" {
+		return InvalidArguments
+	}
 	log.Printf("call ChangeEmail('%s', '%s')\n", userID, email)
 
 	return us.readModifyWrite(userID, func(user *user.User) error {
@@ -117,11 +120,14 @@ func (us *UserService) ChangeEmail(userID, email string) error {
 // Error Helpers
 //
 func (us *UserService) Authenticate(loginName, loginPassword string) (string, error) {
+	if loginName == "" || loginPassword == "" {
+		return "", InvalidArguments
+	}
 	log.Printf("call Authenticate('%s', ...)\n", loginName)
 
 	theUser, err := us.UserStorage.FindByLoginName(loginName)
 	if err != nil {
-		return "", errgo.Mask(err)
+		return "", Mask(err)
 	}
 
 	if us.AuthEmailMustBeVerified {
@@ -151,6 +157,9 @@ func (us *UserService) Authenticate(loginName, loginPassword string) (string, er
 }
 
 func (us *UserService) SetEmailVerified(userID string) error {
+	if userID == "" {
+		return InvalidArguments
+	}
 	log.Printf("call SetEmailVerified('%s')\n", userID)
 
 	return us.readModifyWrite(userID, func(user *user.User) error {
@@ -165,6 +174,9 @@ func (us *UserService) SetEmailVerified(userID string) error {
 }
 
 func (us *UserService) CheckAndSetEmailVerified(userID, email string) error {
+	if userID == "" || email == "" {
+		return InvalidArguments
+	}
 	log.Printf("call CheckAndSetEmailVerified('%s', '%s')\n", userID, email)
 
 	return us.readModifyWrite(userID, func(user *user.User) error {
@@ -186,21 +198,21 @@ func (us *UserService) CheckAndSetEmailVerified(userID, email string) error {
 func (us *UserService) readModifyWrite(userID string, modifier func(user *user.User) error, success ...func(user *user.User)) error {
 	user, err := us.UserStorage.Get(userID)
 	if err != nil {
-		return errgo.Mask(err)
+		return Mask(err)
 	}
 
 	// log.Printf("READ %v\n", user)
 
 	err = modifier(&user)
 	if err != nil {
-		return errgo.Mask(err)
+		return Mask(err)
 	}
 
 	// log.Printf("WRITE %v\n", user)
 
 	err = us.UserStorage.Save(user)
 	if err != nil {
-		return errgo.Mask(err)
+		return Mask(err)
 	}
 
 	for _, f := range success {

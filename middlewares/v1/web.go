@@ -14,6 +14,7 @@ import (
 
 var (
 	MaskError = errgo.MaskFunc(
+		service.IsServiceError,
 		service.IsNotFoundError, service.IsEmailAlreadyTakenError,
 		service.IsLoginNameAlreadyTakenError, service.IsUserEmailMustBeVerifiedError,
 	)
@@ -59,7 +60,7 @@ func (base *BaseHandler) handleProcessingError(resp http.ResponseWriter, req *ht
 	err = errgo.Cause(err)
 	if service.IsNotFoundError(err) {
 		httputil.WriteNotFound(resp)
-	} else if service.IsEmailAlreadyTakenError(err) || service.IsLoginNameAlreadyTakenError(err) {
+	} else if service.IsEmailAlreadyTakenError(err) || service.IsLoginNameAlreadyTakenError(err) || service.IsServiceError(err) {
 		httputil.WriteBadRequest(resp, req, err.Error())
 	} else if err == service.InvalidCredentials {
 		httputil.WriteBadRequest(resp, req)
