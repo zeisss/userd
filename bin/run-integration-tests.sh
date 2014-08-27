@@ -29,8 +29,8 @@ function cleanup() {
 
 function run_suites() {
 
-	run_test_suite "-auth-email=true -eventlog=log" ".+Integration.+__Suite(All|AuthEmailTrue)" $*
-	run_test_suite "-auth-email=false -eventlog=log" ".+Integration.+__Suite(All|AuthEmailFalse)" $*
+	run_test_suite "-auth-email=true -eventstream=log" ".+Integration.+__Suite(All|AuthEmailTrue)" $*
+	run_test_suite "-auth-email=false -eventstream=log" ".+Integration.+__Suite(All|AuthEmailFalse)" $*
 
 	run_test_suite "-auth-email=true" ".+Integration.+__Suite(All|AuthEmailTrue)" $*
 	run_test_suite "-auth-email=false" ".+Integration.+__Suite(All|AuthEmailFalse)" $*

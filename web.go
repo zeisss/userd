@@ -1,10 +1,11 @@
 package main
 
 import (
+	httputil "./http"
 	"./service"
 	"./service/user"
 
-	httputil "./http"
+	"github.com/gorilla/mux"
 
 	"log"
 	"net/http"
@@ -13,18 +14,17 @@ import (
 func NewUserAPIHandler(userService *service.UserService) http.Handler {
 	base := BaseHandler{userService}
 
-	mux := http.NewServeMux()
-	mux.Handle("/v1/user/create", httputil.EnforeMethod("POST", &CreateUserHandler{base}))
-	mux.Handle("/v1/user/get", httputil.EnforeMethod("GET", &GetUserHandler{base}))
-	mux.Handle("/v1/user/change_login_credentials", httputil.EnforeMethod("POST", &ChangeLoginCredentialsHandler{base}))
-	mux.Handle("/v1/user/change_email", httputil.EnforeMethod("POST", &ChangeEmailHandler{base}))
-	mux.Handle("/v1/user/change_profile_name", httputil.EnforeMethod("POST", &ChangeProfileNameHandler{base}))
+	mux := mux.NewRouter()
+	mux.Methods("POST").Path("/v1/user/create").Handler(&CreateUserHandler{base})
+	mux.Methods("GET").Path("/v1/user/get").Handler(&GetUserHandler{base})
+	mux.Methods("POST").Path("/v1/user/change_login_credentials").Handler(&ChangeLoginCredentialsHandler{base})
+	mux.Methods("POST").Path("/v1/user/change_email").Handler(&ChangeEmailHandler{base})
+	mux.Methods("POST").Path("/v1/user/change_profile_name").Handler(&ChangeProfileNameHandler{base})
+	mux.Methods("POST").Path("/v1/user/verify_email").Handler(&VerifyEmailHandler{base})
 
-	mux.Handle("/v1/user/authenticate", httputil.EnforeMethod("POST", &AuthenticationHandler{base}))
+	mux.Methods("POST").Path("/v1/user/authenticate").Handler(&AuthenticationHandler{base})
 
-	mux.Handle("/v1/user/verify_email", httputil.EnforeMethod("POST", &VerifyEmailHandler{base}))
-
-	mux.Handle("/", &WelcomeHandler{base})
+	mux.Methods("GET").Path("/").Handler(&WelcomeHandler{base})
 
 	return mux
 }
