@@ -9,7 +9,8 @@ import (
 
 	httpcli "./http/cli"
 
-	"flag"
+	flag "github.com/ogier/pflag"
+
 	"os"
 )
 
@@ -106,6 +107,7 @@ var (
 )
 
 func main() {
+	starter := httpcli.NewStarterFromFlagSet(flag.CommandLine)
 	flag.Parse()
 
 	dependencies := service.Dependencies{IdFactory(), PasswordHasher(), UserStorage(), EventStream()}
@@ -114,5 +116,5 @@ func main() {
 	userService := service.UserService{dependencies, config}
 
 	handler := NewUserAPIHandler(&userService)
-	httpcli.StartHttpInterface(handler)
+	starter.StartHttpInterface(handler)
 }

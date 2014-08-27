@@ -3,30 +3,51 @@ package cli
 import (
 	httputil ".."
 
-	"flag"
 	"net/http"
 )
 
-var (
-	listenAddress  = flag.String("listen", "localhost:8080", "The address to listen on.")
-	wrapLogHandler = flag.Bool("log-requests", false, "Should requests be logged to stdout")
+type HttpServerStarter struct {
+	ListenAddress string
+	LogRequests   bool
 
-	httpsUse             = flag.Bool("https-enable", false, "Enable HTTPS listening in favor of HTTP.")
-	httpsCertificateFile = flag.String("https-certificate", "server.cert", "The certificate to use for SSL.")
-	httpsKeyFile         = flag.String("https-key", "server.key", "The keyfile to use for SSL.")
-)
+	UseHttps             bool
+	HttpsCertificateFile string
+	HttpsKeyFile         string
+}
 
-func StartHttpInterface(handler http.Handler) {
-	if *wrapLogHandler {
+type FlagSet interface {
+	StringVar(p *string, name, defaultValue, help string)
+	BoolVar(p *bool, name string, defaultValue bool, help string)
+}
+
+func NewHttpServerStarter() *HttpServerStarter {
+	return &HttpServerStarter{
+		ListenAddress: "localhost:8080",
+	}
+}
+
+func NewStarterFromFlagSet(flagSet FlagSet) *HttpServerStarter {
+	starter := NewHttpServerStarter()
+	flagSet.StringVar(&starter.ListenAddress, "listen", "localhost:8080", "The address to listen on.")
+	flagSet.BoolVar(&starter.LogRequests, "log-requests", false, "Should requests be logged to stdout")
+
+	flagSet.BoolVar(&starter.UseHttps, "https-enable", false, "Enable HTTPS listening in favor of HTTP.")
+	flagSet.StringVar(&starter.HttpsCertificateFile, "https-certificate", "server.cert", "The certificate to use for SSL.")
+	flagSet.StringVar(&starter.HttpsKeyFile, "https-key", "server.key", "The keyfile to use for SSL.")
+	return starter
+}
+
+func (starter *HttpServerStarter) StartHttpInterface(handler http.Handler) {
+	if starter.LogRequests {
 		handler = &httputil.RequestLogger{handler}
 	}
 
-	if *httpsUse {
-		if err := http.ListenAndServeTLS(*listenAddress, *httpsCertificateFile, *httpsKeyFile, handler); err != nil {
+	if starter.UseHttps {
+		if err := http.ListenAndServeTLS(starter.ListenAddress, starter.HttpsCertificateFile, starter.HttpsKeyFile, handler); err != nil {
 			panic(err)
 		}
 	} else {
-		if err := http.ListenAndServe(*listenAddress, handler); err != nil {
+		if err := http.ListenAndServe(starter.ListenAddress, handler); err != nil {
 			panic(err)
 		}
 	}
