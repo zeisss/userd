@@ -13,9 +13,11 @@ import (
 	httpcli "./http/cli"
 
 	flag "github.com/ogier/pflag"
+	metrics "github.com/rcrowley/go-metrics"
 
 	"net/http"
 	"os"
+	"time"
 )
 
 // ------------------------------------------------------------------------------
@@ -107,13 +109,38 @@ func EventStream() service.EventStream {
 // ------------------------------------------------------------------------------
 
 var (
+	metricsCaptureDebugGCStats       = flag.Bool("metrics-capture-debug-stats", false, "Capture GC Debug stats in the metrics")
+	metricsCaptureDebugGCDuration    = flag.Int("metrics-capture-debug-duration", 60, "Duration between catching debug stats")
+	metricsCaptureRuntimeMemStats    = flag.Bool("metrics-capture-runtime-stats", true, "Capture Runtime Mem Stats")
+	metricsCaptureRuntimeMemDuration = flag.Int("metrics-capture-runtime-duration", 60, "Duration between catching runtime stats")
+)
+
+func Registry() metrics.Registry {
+	r := metrics.DefaultRegistry
+
+	if *metricsCaptureDebugGCStats {
+		metrics.RegisterDebugGCStats(r)
+		go metrics.CaptureDebugGCStats(r, time.Duration(*metricsCaptureDebugGCDuration))
+	}
+	if *metricsCaptureRuntimeMemStats {
+		metrics.RegisterRuntimeMemStats(r)
+		go metrics.CaptureRuntimeMemStats(r, time.Duration(*metricsCaptureRuntimeMemDuration))
+	}
+	return r
+}
+
+// ------------------------------------------------------------------------------
+
+var (
 	authEmail = flag.Bool("auth-email", true, "Must the email adress be verified for an authentication to succeed.")
 )
 
 func main() {
+
 	starter := httpcli.NewStarterFromFlagSet(flag.CommandLine)
 	flag.Parse()
 
+	Registry() // Just called, because it uses the DefaultRegistry
 	dependencies := service.Dependencies{IdFactory(), PasswordHasher(), UserStorage(), EventStream()}
 	config := service.Config{*authEmail}
 
