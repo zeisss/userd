@@ -1,9 +1,9 @@
-package main
+package v1
 
 import (
-	httputil "./http"
-	"./service"
-	"./service/user"
+	httputil "../../http"
+	"../../service"
+	"../../service/user"
 
 	"github.com/gorilla/mux"
 

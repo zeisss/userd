@@ -1,10 +1,12 @@
 package main
 
 import (
+	"./middlewares/v1"
 	"./service"
 	"./service/eventstream"
 	"./service/hasher"
 	"./service/idfactory"
+
 	"./service/storage"
 
 	httpcli "./http/cli"
@@ -115,6 +117,6 @@ func main() {
 
 	userService := service.UserService{dependencies, config}
 
-	handler := NewUserAPIHandler(&userService)
+	handler := v1.NewUserAPIHandler(&userService)
 	starter.StartHttpInterface(handler)
 }
