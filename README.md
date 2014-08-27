@@ -3,6 +3,19 @@ User Service
 
 Microservice to create/read/update and authenticate users.
 
+## About Users
+
+The user object currently consists of only a few fields:
+
+ * `profile_name` - A name that the user should be able to give himself. 
+ * `email` - The email of the user
+ * `email_verified` - Has the email of the user already been verified to work?
+ * `login_name` and `login_password_hash` - The login credentials needed for `Authenticate()`
+
+The `email` and `login_name` must each be unique among all users. 
+
+If the consumer wants to use the email as the login_name, it must be provided separately for each field. The consumer is responsible for updating both fields (see the API), if the email changes.
+
 ## Email Verification
 
 When creating a new user, the email is considered 'unverified'. Based on the `--auth-email` command line arguments,
@@ -14,61 +27,4 @@ Passwords are hashed using the `code.google.com/p/go.crypto/bcrypt` library befo
 
 ## API
 
-### POST /v1/user/create
-
-+ Request 
-
-	login_name=mr.example@acme.com&login_password=TopSecret&profile_name=Mr.%20Example&email=mr.example@acme.com
-
-+ Response 200
-
-	+ Headers
-
-			Location: /v1/user/get?id=1
-
-	+ Body
-
-			1
-
-
-### GET /v1/user/get?id={userid}
-
-+ Response 200
-
-		{
-			"profile_name": "ZeissS",
-			"email": "stephan@moinz.de",
-			"email_verified": false
-		}
-
-+ Response 404
-
-### POST /v1/user/verify_email?id={userid}&email={email}
-
-Flags the email of the user as verified. The `email` parameter is optional and can be used to ensure that the correct email
-gets verified - maybe the user changed the email after the original verification email was sent out.
-
-+ Response 204
-+ Response 400
-+ Response 404
-
-### POST /v1/user/change_email?id={userid}&email={email}
-
-Updates the email of the user identified by `userid`.
-
-### POST /v1/user/change_profile_name?id={userid}&profile_name={name}
-
-### POST /v1/user/change_login_credentials?id={userid}&name={name}&password={password}
-
-Updates the credentials to be used with `/authenticate`.
-
-### POST /v1/user/authenticate?name={login_name}&password={login_password}
-
-Performs an authentication with given credentials. If the credentials are valid and the user can be authenticated (e.g. is not locked), the userid will be returned.
-
-+ Response 204
-
-		{userid}
-
-+ Response 400
-+ Response 404
+See `API_v1.md` for the current old-school interface. For V2 we will make this a bit more REST like. Comming soon.
