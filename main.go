@@ -109,23 +109,24 @@ func EventStream() service.EventStream {
 // ------------------------------------------------------------------------------
 
 var (
-	metricsCaptureDebugGCStats       = flag.Bool("metrics-capture-debug-stats", false, "Capture GC Debug stats in the metrics")
-	metricsCaptureDebugGCDuration    = flag.Int("metrics-capture-debug-duration", 60, "Duration between catching debug stats")
-	metricsCaptureRuntimeMemStats    = flag.Bool("metrics-capture-runtime-stats", true, "Capture Runtime Mem Stats")
-	metricsCaptureRuntimeMemDuration = flag.Int("metrics-capture-runtime-duration", 60, "Duration between catching runtime stats")
+	metricsCaptureDebugGCStats       = flag.Bool("metrics-capture-debug-stats", false, "Capture GC Debug stats in the metrics.")
+	metricsCaptureDebugGCDuration    = flag.Int("metrics-capture-debug-duration", 60, "Duration between catching debug stats.")
+	metricsCaptureRuntimeMemStats    = flag.Bool("metrics-capture-runtime-stats", true, "Capture Runtime Mem Stats.")
+	metricsCaptureRuntimeMemDuration = flag.Int("metrics-capture-runtime-duration", 60, "Duration between catching runtime stats.")
 )
 
-func Registry() metrics.Registry {
+func MetricsRegistry() metrics.Registry {
 	r := metrics.DefaultRegistry
 
 	if *metricsCaptureDebugGCStats {
 		metrics.RegisterDebugGCStats(r)
-		go metrics.CaptureDebugGCStats(r, time.Duration(*metricsCaptureDebugGCDuration))
+		go metrics.CaptureDebugGCStats(r, time.Duration(*metricsCaptureDebugGCDuration)*time.Second)
 	}
 	if *metricsCaptureRuntimeMemStats {
 		metrics.RegisterRuntimeMemStats(r)
-		go metrics.CaptureRuntimeMemStats(r, time.Duration(*metricsCaptureRuntimeMemDuration))
+		go metrics.CaptureRuntimeMemStats(r, time.Duration(*metricsCaptureRuntimeMemDuration)*time.Second)
 	}
+
 	return r
 }
 
@@ -136,11 +137,12 @@ var (
 )
 
 func main() {
-
 	starter := httpcli.NewStarterFromFlagSet(flag.CommandLine)
+
 	flag.Parse()
 
-	Registry() // Just called, because it uses the DefaultRegistry
+	MetricsRegistry() // Just calling, because it uses the DefaultRegistry
+
 	dependencies := service.Dependencies{IdFactory(), PasswordHasher(), UserStorage(), EventStream()}
 	config := service.Config{*authEmail}
 

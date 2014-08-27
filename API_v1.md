@@ -58,3 +58,19 @@ Performs an authentication with given credentials. If the credentials are valid 
 
 + Response 400
 + Response 404
+
+
+### GET /v1/metrics
+
+Returns the internally collected metrics as JSON.
+
++ Response 200
+
+		{
+			"metricname": {
+				"value": 1
+			},
+			"nextmetric...":...
+
+		}
+		}
