@@ -15,6 +15,7 @@ import (
 	flag "github.com/ogier/pflag"
 	metrics "github.com/rcrowley/go-metrics"
 
+	"net"
 	"net/http"
 	"os"
 	"time"
@@ -113,6 +114,11 @@ var (
 	metricsCaptureDebugGCDuration    = flag.Int("metrics-capture-debug-duration", 60, "Duration between catching debug stats.")
 	metricsCaptureRuntimeMemStats    = flag.Bool("metrics-capture-runtime-stats", true, "Capture Runtime Mem Stats.")
 	metricsCaptureRuntimeMemDuration = flag.Int("metrics-capture-runtime-duration", 60, "Duration between catching runtime stats.")
+
+	metricsGraphiteEnable = flag.Bool("metrics-graphite", false, "Write metrics to graphite")
+	metricsGraphiteHost   = flag.String("metrics-graphite-host", "localhost:2003", "The host:port to connect to.")
+	metricsGraphiteFlush  = flag.Int("metrics-graphite-flush", 10, "Seconds between flushes to graphite")
+	metricsGraphitePrefix = flag.String("metrics-graphite-prefix", "userd", "A prefix for key sent to graphite")
 )
 
 func MetricsRegistry() metrics.Registry {
@@ -125,6 +131,14 @@ func MetricsRegistry() metrics.Registry {
 	if *metricsCaptureRuntimeMemStats {
 		metrics.RegisterRuntimeMemStats(r)
 		go metrics.CaptureRuntimeMemStats(r, time.Duration(*metricsCaptureRuntimeMemDuration)*time.Second)
+	}
+
+	if *metricsGraphiteEnable {
+		addr, err := net.ResolveTCPAddr("tcp", *metricsGraphiteHost)
+		if err != nil {
+			panic(err)
+		}
+		go metrics.Graphite(r, time.Duration(*metricsGraphiteFlush)*time.Second, *metricsGraphitePrefix, addr)
 	}
 
 	return r
