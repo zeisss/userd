@@ -3,6 +3,8 @@ package service
 import (
 	"./user"
 
+	"github.com/juju/errgo"
+
 	"encoding/json"
 	"errors"
 	"log"
@@ -50,7 +52,7 @@ func (us *UserService) CreateUser(profileName, email, loginName, loginPassword s
 	err := us.UserStorage.Save(theUser)
 
 	if err != nil {
-		return "", err
+		return "", errgo.Mask(err)
 	}
 
 	us.logEvent("user.created", struct {
@@ -63,7 +65,8 @@ func (us *UserService) CreateUser(profileName, email, loginName, loginPassword s
 
 func (us *UserService) GetUser(id string) (user.User, error) {
 	log.Printf("call GetUser('%s')\n", id)
-	return us.UserStorage.Get(id)
+	user, err := us.UserStorage.Get(id)
+	return user, errgo.Mask(err)
 }
 
 func (us *UserService) ChangeLoginCredentials(userID, newLogin, newPassword string) error {
@@ -118,7 +121,7 @@ func (us *UserService) Authenticate(loginName, loginPassword string) (string, er
 
 	theUser, err := us.UserStorage.FindByLoginName(loginName)
 	if err != nil {
-		return "", err
+		return "", errgo.Mask(err)
 	}
 
 	if us.AuthEmailMustBeVerified {
@@ -183,21 +186,21 @@ func (us *UserService) CheckAndSetEmailVerified(userID, email string) error {
 func (us *UserService) readModifyWrite(userID string, modifier func(user *user.User) error, success ...func(user *user.User)) error {
 	user, err := us.UserStorage.Get(userID)
 	if err != nil {
-		return err
+		return errgo.Mask(err)
 	}
 
 	// log.Printf("READ %v\n", user)
 
 	err = modifier(&user)
 	if err != nil {
-		return err
+		return errgo.Mask(err)
 	}
 
 	// log.Printf("WRITE %v\n", user)
 
 	err = us.UserStorage.Save(user)
 	if err != nil {
-		return err
+		return errgo.Mask(err)
 	}
 
 	for _, f := range success {

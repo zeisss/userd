@@ -50,13 +50,13 @@ func (s *keyValueStorage) Save(user user.User) error {
 
 	// Unique Index Validation
 	if taken, err := s.checkTakenByOtherUser(s.Emails, user.Email, user.ID); err != nil {
-		return err
+		return errgo.Mask(err)
 	} else if taken {
 		return EmailAlreadyTaken
 	}
 
 	if taken, err := s.checkTakenByOtherUser(s.LoginNames, user.LoginName, user.ID); err != nil {
-		return err
+		return errgo.Mask(err)
 	} else if taken {
 		return LoginNameAlreadyTaken
 	}
@@ -98,7 +98,7 @@ func (s *keyValueStorage) Get(userID string) (user.User, error) {
 func (s *keyValueStorage) FindByLoginName(loginName string) (user.User, error) {
 	userID, ok, err := s.LoginNames.Lookup(loginName)
 	if err != nil {
-		return user.User{}, err
+		return user.User{}, errgo.Mask(err)
 	}
 	if !ok {
 		return user.User{}, UserNotFound
@@ -111,7 +111,7 @@ func (s *keyValueStorage) FindByLoginName(loginName string) (user.User, error) {
 func (s *keyValueStorage) checkTakenByOtherUser(index keyValueIndex, key, userID string) (bool, error) {
 	otherUserID, taken, err := index.Lookup(key)
 	if err != nil {
-		return false, err
+		return false, errgo.Mask(err)
 	}
 	if taken && otherUserID != userID {
 		return true, nil

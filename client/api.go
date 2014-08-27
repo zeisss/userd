@@ -1,6 +1,8 @@
 package client
 
 import (
+	"github.com/juju/errgo"
+
 	"encoding/json"
 	"errors"
 	"io/ioutil"
@@ -46,7 +48,7 @@ func ApiGetUser(userID string) (ApiUser, error) {
 
 	resp, err := getAndExpect("get", params, http.StatusOK)
 	if err != nil {
-		return result, err
+		return result, errgo.Mask(err)
 	}
 
 	err = json.NewDecoder(resp.Body).Decode(&result)
@@ -56,7 +58,7 @@ func ApiGetUser(userID string) (ApiUser, error) {
 func getAndExpect(action string, params url.Values, expectedStatusCode int) (*http.Response, error) {
 	resp, err := http.Get(Endpoint(action) + "?" + params.Encode())
 	if err != nil {
-		return resp, err
+		return resp, errgo.Mask(err)
 	}
 	if resp.StatusCode != expectedStatusCode {
 		log.Printf("URL 'GET %s' returned code %d, expected %d", Endpoint(action), resp.StatusCode, expectedStatusCode)
@@ -78,7 +80,7 @@ func postFormAndExpectAndReturnBodyString(action string, params url.Values, expe
 
 	data, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
-		return "", err
+		return "", errgo.Mask(err)
 	}
 	return string(data), nil
 }
@@ -91,7 +93,7 @@ type JsonCall struct {
 
 func (c JsonCall) ResponseOK(resp *http.Response) (interface{}, error) {
 	if err := json.NewDecoder(resp.Body).Decode(c.Target); err != nil {
-		return c.Target, err
+		return c.Target, errgo.Mask(err)
 	}
 	return c.Target, nil
 }
@@ -103,7 +105,7 @@ type BodyReader struct{}
 func (c BodyReader) ResponseOK(resp *http.Response) (interface{}, error) {
 	data, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
-		return "", err
+		return "", errgo.Mask(err)
 	}
 	return string(data), nil
 }
@@ -111,7 +113,7 @@ func (c BodyReader) ResponseOK(resp *http.Response) (interface{}, error) {
 func (call BodyReader) ResponseBadRequest(resp *http.Response) (interface{}, error) {
 	data, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
-		return "", err
+		return "", errgo.Mask(err)
 	}
 	return "", errors.New(string(data))
 }
@@ -120,7 +122,7 @@ func (call BodyReader) ResponseBadRequest(resp *http.Response) (interface{}, err
 
 func ApiVerifyEmail(userID string) error {
 	_, err := Execute(Endpoint("verify_email"), VerifyEmailCall{UserID: userID})
-	return err
+	return errgo.Mask(err)
 }
 
 type VerifyEmailCall struct {
@@ -146,7 +148,7 @@ func (call VerifyEmailCall) ResponseNoContent(resp *http.Response) (interface{},
 func ApiAuthenticate(loginName, loginPassword string) (string, error) {
 	userID, err := Execute(Endpoint("authenticate"), AuthenticateCall{Name: loginName, Password: loginPassword})
 	if err != nil {
-		return "", err
+		return "", errgo.Mask(err)
 	}
 	return userID.(string), nil
 }
@@ -168,7 +170,7 @@ func (call AuthenticateCall) PostForm() url.Values {
 
 func ApiChangeProfileName(userID, profileName string) error {
 	_, err := Execute(Endpoint("change_profile_name"), ChangeProfileNameCall{ID: userID, ProfileName: profileName})
-	return err
+	return errgo.Mask(err)
 }
 
 type ChangeProfileNameCall struct {
@@ -191,7 +193,7 @@ func (call ChangeProfileNameCall) ResponseNoContent(resp *http.Response) (interf
 
 func ApiChangeLoginCredentials(userID, name, password string) error {
 	_, err := Execute(Endpoint("change_login_credentials"), ChangeLoginCredentialsCall{ID: userID, Login: name, Password: password})
-	return err
+	return errgo.Mask(err)
 }
 
 type ChangeLoginCredentialsCall struct {

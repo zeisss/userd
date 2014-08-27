@@ -8,6 +8,7 @@ import (
 	"net/http"
 
 	"github.com/coreos/go-etcd/etcd"
+	"github.com/juju/errgo"
 )
 
 func NewEtcdStorage(peer, prefix string, ttl uint64) *etcdStorage {
@@ -29,7 +30,7 @@ func (s *etcdStorage) Get(userID string) (user.User, error) {
 
 	rawResp, err := s.client.RawGet(s.Path(userID), false, false)
 	if err != nil {
-		return result, err
+		return result, errgo.Mask(err)
 	}
 
 	if rawResp.StatusCode == http.StatusNotFound {
@@ -38,7 +39,7 @@ func (s *etcdStorage) Get(userID string) (user.User, error) {
 
 	resp, err := rawResp.Unmarshal()
 	if err != nil {
-		return result, err
+		return result, errgo.Mask(err)
 	}
 	if resp.Action != "get" {
 		return result, fmt.Errorf("Unexpected response from etcd: action=%s", resp.Action)
@@ -51,7 +52,7 @@ func (s *etcdStorage) Get(userID string) (user.User, error) {
 
 func (s *etcdStorage) Save(user user.User) error {
 	_, err := s.client.Set(s.Path(user.ID), s.Marshal(&user), s.ttl)
-	return err
+	return errgo.Mask(err)
 }
 
 func (s *etcdStorage) Path(userID string) string {

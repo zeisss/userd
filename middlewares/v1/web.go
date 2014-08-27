@@ -6,9 +6,17 @@ import (
 	"../../service/user"
 
 	"github.com/gorilla/mux"
+	"github.com/juju/errgo"
 
 	"log"
 	"net/http"
+)
+
+var (
+	MaskError = errgo.MaskFunc(
+		service.IsNotFoundError, service.IsEmailAlreadyTakenError,
+		service.IsLoginNameAlreadyTakenError, service.IsUserEmailMustBeVerifiedError,
+	)
 )
 
 func NewUserAPIHandler(userService *service.UserService) http.Handler {
@@ -50,6 +58,7 @@ func (base *BaseHandler) UserID(req *http.Request) (string, bool) {
 }
 
 func (base *BaseHandler) handleProcessingError(resp http.ResponseWriter, req *http.Request, err error) {
+	err = errgo.Cause(err)
 	if service.IsNotFoundError(err) {
 		httputil.WriteNotFound(resp)
 	} else if service.IsEmailAlreadyTakenError(err) || service.IsLoginNameAlreadyTakenError(err) {
@@ -79,7 +88,7 @@ func (h *CreateUserHandler) ServeHTTP(resp http.ResponseWriter, req *http.Reques
 	userID, err := h.UserService.CreateUser(profileName, email, loginName, loginPassword)
 
 	if err != nil {
-		h.handleProcessingError(resp, req, err)
+		h.handleProcessingError(resp, req, MaskError(err))
 	} else {
 		resp.Header().Add("location", "/v1/user/get?id="+userID)
 		resp.WriteHeader(http.StatusCreated)
@@ -102,7 +111,7 @@ func (h *GetUserHandler) ServeHTTP(resp http.ResponseWriter, req *http.Request) 
 
 	user, err := h.UserService.GetUser(userId)
 	if err != nil {
-		h.handleProcessingError(resp, req, err)
+		h.handleProcessingError(resp, req, MaskError(err))
 	} else {
 		h.writeUser(resp, &user)
 	}
@@ -142,7 +151,7 @@ func (h *ChangeLoginCredentialsHandler) ServeHTTP(resp http.ResponseWriter, req 
 	}
 
 	if err := h.UserService.ChangeLoginCredentials(userID, newLogin, newPassword); err != nil {
-		h.handleProcessingError(resp, req, err)
+		h.handleProcessingError(resp, req, MaskError(err))
 	} else {
 		resp.WriteHeader(http.StatusNoContent)
 	}
@@ -166,7 +175,7 @@ func (h *ChangeProfileNameHandler) ServeHTTP(resp http.ResponseWriter, req *http
 	}
 
 	if err := h.UserService.ChangeProfileName(userID, newProfileName); err != nil {
-		h.handleProcessingError(resp, req, err)
+		h.handleProcessingError(resp, req, MaskError(err))
 	} else {
 		httputil.WriteNoContent(resp)
 	}
@@ -190,7 +199,7 @@ func (h *ChangeEmailHandler) ServeHTTP(resp http.ResponseWriter, req *http.Reque
 	}
 
 	if err := h.UserService.ChangeEmail(userID, newEmail); err != nil {
-		h.handleProcessingError(resp, req, err)
+		h.handleProcessingError(resp, req, MaskError(err))
 	} else {
 		resp.WriteHeader(http.StatusNoContent)
 	}
@@ -211,7 +220,7 @@ func (h *AuthenticationHandler) ServeHTTP(resp http.ResponseWriter, req *http.Re
 
 	userID, err := h.UserService.Authenticate(loginName, loginPassword)
 	if err != nil {
-		h.handleProcessingError(resp, req, err)
+		h.handleProcessingError(resp, req, MaskError(err))
 	} else {
 		resp.WriteHeader(http.StatusOK)
 		resp.Write([]byte(userID))
@@ -239,7 +248,7 @@ func (h *VerifyEmailHandler) ServeHTTP(resp http.ResponseWriter, req *http.Reque
 	}
 
 	if err != nil {
-		h.handleProcessingError(resp, req, err)
+		h.handleProcessingError(resp, req, MaskError(err))
 	} else {
 		resp.WriteHeader(http.StatusNoContent)
 	}

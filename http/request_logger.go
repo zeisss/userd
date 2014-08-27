@@ -1,6 +1,8 @@
 package http
 
 import (
+	"github.com/juju/errgo"
+
 	"log"
 	"net/http"
 	"time"
@@ -41,7 +43,7 @@ type ResponseRecorder struct {
 func (e *ResponseRecorder) Write(b []byte) (int, error) {
 	n, err := e.ResponseWriter.Write(b)
 	e.BytesWritten += int64(n)
-	return n, err
+	return n, errgo.Mask(err)
 }
 
 // WriteHeader captures the status code and writes through to the wrapper ResponseWriter.
