@@ -7,6 +7,7 @@ import (
 
 	"github.com/gorilla/mux"
 	"github.com/juju/errgo"
+	metrics "github.com/rcrowley/go-metrics"
 
 	"log"
 	"net/http"
@@ -31,6 +32,8 @@ func NewUserAPIHandler(userService *service.UserService) http.Handler {
 	mux.Methods("POST").Path("/v1/user/verify_email").Handler(&VerifyEmailHandler{base})
 
 	mux.Methods("POST").Path("/v1/user/authenticate").Handler(&AuthenticationHandler{base})
+
+	mux.Methods("GET").Path("/v1/metrics").Handler(&MetricsWriter{metrics.DefaultRegistry})
 
 	return mux
 }
@@ -226,6 +229,7 @@ func (h *AuthenticationHandler) ServeHTTP(resp http.ResponseWriter, req *http.Re
 }
 
 // ----------------------------------------------
+
 type VerifyEmailHandler struct{ BaseHandler }
 
 func (h *VerifyEmailHandler) ServeHTTP(resp http.ResponseWriter, req *http.Request) {
@@ -257,4 +261,15 @@ func (h *VerifyEmailHandler) Email(req *http.Request) (string, bool) {
 		return "", false
 	}
 	return email[0], true
+}
+
+// ----------------------------------------------
+
+type MetricsWriter struct {
+	Registry metrics.Registry
+}
+
+func (m *MetricsWriter) ServeHTTP(resp http.ResponseWriter, req *http.Request) {
+	resp.Header().Add("Content-Type", "application/json")
+	metrics.WriteJSONOnce(m.Registry, resp)
 }

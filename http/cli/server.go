@@ -3,8 +3,19 @@ package cli
 import (
 	httputil ".."
 
+	"log"
 	"net/http"
 )
+
+func LogRecord(req *http.Request, recorder httputil.ResponseRecorder) {
+	log.Printf("%s %s \"%s\" %d %d\n",
+		req.Method,
+		req.URL,
+		req.UserAgent(),
+		recorder.StatusCode,
+		recorder.TimeTaken,
+	)
+}
 
 type HttpServerStarter struct {
 	ListenAddress string
@@ -39,7 +50,7 @@ func NewStarterFromFlagSet(flagSet FlagSet) *HttpServerStarter {
 
 func (starter *HttpServerStarter) StartHttpInterface(handler http.Handler) {
 	if starter.LogRequests {
-		handler = &httputil.RequestLogger{handler}
+		handler = &httputil.RequestLogger{handler, LogRecord}
 	}
 
 	if starter.UseHttps {

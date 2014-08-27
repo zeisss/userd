@@ -4,6 +4,7 @@ import (
 	"./user"
 
 	"github.com/juju/errgo"
+	metrics "github.com/rcrowley/go-metrics"
 
 	"encoding/json"
 	"errors"
@@ -14,6 +15,9 @@ var (
 	InvalidCredentials       = errors.New("Invalid credentials.")
 	InvalidVerificationEmail = errors.New("Email adress does not match current email for user.")
 	UserEmailMustBeVerified  = errors.New("Email must be verified to authenticate.")
+
+	createdSuccess = metrics.GetOrRegisterCounter("service/create/success", metrics.DefaultRegistry)
+	createdFailed  = metrics.GetOrRegisterCounter("service/create/failed", metrics.DefaultRegistry)
 )
 
 type Dependencies struct {
@@ -52,9 +56,11 @@ func (us *UserService) CreateUser(profileName, email, loginName, loginPassword s
 	err := us.UserStorage.Save(theUser)
 
 	if err != nil {
+		createdFailed.Inc(1)
 		return "", errgo.Mask(err)
 	}
 
+	createdSuccess.Inc(1)
 	us.logEvent("user.created", struct {
 		UserID      string `json:"user_id"`
 		ProfileName string `json:"profile_name"`
