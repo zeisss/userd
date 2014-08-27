@@ -7,9 +7,11 @@ import (
 	"time"
 )
 
+type Handler func(req *http.Request, entry ResponseRecorder)
+
 type RequestLogger struct {
 	Next    http.Handler
-	Handler func(req *http.Request, entry ResponseRecorder)
+	Handler Handler
 }
 
 func (l *RequestLogger) ServeHTTP(resp http.ResponseWriter, req *http.Request) {

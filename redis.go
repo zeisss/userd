@@ -42,7 +42,7 @@ func NewPool(address, password string, maxIdle, maxActive int, timeout time.Dura
 }
 
 var (
-	redisAddress     = flag.String("redis-address", "localhost:6370", "Address to connect to.")
+	redisAddress     = flag.String("redis-address", "localhost:6379", "Address to connect to.")
 	redisPassword    = flag.String("redis-auth", "", "Password to send when establishing a connection.")
 	redisMaxIdle     = flag.Int("redis-max-idle", 20, "Maximum number of idle connections before closing.")
 	redisMaxActive   = flag.Int("redis-max-active", 20, "Maximum number of open connections.")

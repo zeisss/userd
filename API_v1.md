@@ -73,4 +73,4 @@ Returns the internally collected metrics as JSON.
 			"nextmetric...":...
 
 		}
-		}
+	

@@ -33,62 +33,65 @@ type UserService struct {
 }
 
 var (
-	counterCreateUser = NewSuccessFailureCounter("service.CreateUser")
+	metricCreateUser = NewSuccessFailureMetric("service.CreateUser")
 )
 
 func (us *UserService) CreateUser(profileName, email, loginName, loginPassword string) (string, error) {
 	log.Printf("call CreateUser('%s', '%s', ..)\n", profileName, email)
 
-	passwordHash := us.Hasher.Hash(loginPassword)
-	newUserID := us.IdFactory.NewUserID()
+	var result string = ""
+	err := metricCreateUser.Run(func() error {
+		passwordHash := us.Hasher.Hash(loginPassword)
+		newUserID := us.IdFactory.NewUserID()
 
-	theUser := user.User{
-		ID:          newUserID,
-		ProfileName: profileName,
+		theUser := user.User{
+			ID:          newUserID,
+			ProfileName: profileName,
 
-		Email:         email,
-		EmailVerified: false,
+			Email:         email,
+			EmailVerified: false,
 
-		LoginName:         loginName,
-		LoginPasswordHash: passwordHash,
-	}
+			LoginName:         loginName,
+			LoginPasswordHash: passwordHash,
+		}
 
-	err := us.UserStorage.Save(theUser)
+		err := us.UserStorage.Save(theUser)
 
-	if err != nil {
-		counterCreateUser.Failure()
-		return "", errgo.Mask(err)
-	}
+		if err != nil {
+			return errgo.Mask(err)
+		}
 
-	us.logEvent("user.created", struct {
-		UserID      string `json:"user_id"`
-		ProfileName string `json:"profile_name"`
-	}{newUserID, profileName})
+		us.logEvent("user.created", struct {
+			UserID      string `json:"user_id"`
+			ProfileName string `json:"profile_name"`
+		}{newUserID, profileName})
 
-	counterCreateUser.Success()
+		result = newUserID
+		return nil
+	})
+	return result, err
 
-	return newUserID, nil
 }
 
 var (
-	counterGetUser = NewSuccessFailureCounter("service.ChangeLoginCredentials")
+	metricGetUser = NewSuccessFailureMetric("service.ChangeLoginCredentials")
 )
 
 func (us *UserService) GetUser(id string) (user.User, error) {
 	log.Printf("call GetUser('%s')\n", id)
 	user, err := us.UserStorage.Get(id)
-	counterGetUser.CountError(err)
+	metricGetUser.CountError(err)
 	return user, errgo.Mask(err)
 }
 
 var (
-	counterChangeLoginCredentials = NewSuccessFailureCounter("service.ChangeLoginCredentials")
+	metricChangeLoginCredentials = NewSuccessFailureMetric("service.ChangeLoginCredentials")
 )
 
 func (us *UserService) ChangeLoginCredentials(userID, newLogin, newPassword string) error {
 	log.Printf("call ChangePassword('%s', ..)\n", userID)
 
-	return counterChangeLoginCredentials.CountError(us.readModifyWrite(userID, func(user *user.User) error {
+	return us.readModifyWrite(metricChangeLoginCredentials, userID, func(user *user.User) error {
 		user.LoginName = newLogin
 		user.LoginPasswordHash = us.Hasher.Hash(newPassword)
 		return nil
@@ -96,17 +99,17 @@ func (us *UserService) ChangeLoginCredentials(userID, newLogin, newPassword stri
 		us.logEvent("user.change_login_credentials", struct {
 			UserID string `json:"user_id"`
 		}{userID})
-	}))
+	})
 }
 
 var (
-	counterChangeProfileName = NewSuccessFailureCounter("service.ChangeProfileName")
+	metricChangeProfileName = NewSuccessFailureMetric("service.ChangeProfileName")
 )
 
 func (us *UserService) ChangeProfileName(userID, profileName string) error {
 	log.Printf("call ChangeProfileName('%s', '%s')\n", userID, profileName)
 
-	return counterChangeProfileName.CountError(us.readModifyWrite(userID, func(user *user.User) error {
+	return us.readModifyWrite(metricChangeProfileName, userID, func(user *user.User) error {
 		user.ProfileName = profileName
 		return nil
 	}, func(user *user.User) {
@@ -114,17 +117,17 @@ func (us *UserService) ChangeProfileName(userID, profileName string) error {
 			UserID      string `json:"user_id"`
 			ProfileName string `json:"profile_name"`
 		}{userID, profileName})
-	}))
+	})
 }
 
 var (
-	counterChangeEmail = NewSuccessFailureCounter("service.ChangeEmail")
+	metricChangeEmail = NewSuccessFailureMetric("service.ChangeEmail")
 )
 
 func (us *UserService) ChangeEmail(userID, email string) error {
 	log.Printf("call ChangeEmail('%s', '%s')\n", userID, email)
 
-	return counterChangeEmail.CountError(us.readModifyWrite(userID, func(user *user.User) error {
+	return us.readModifyWrite(metricChangeEmail, userID, func(user *user.User) error {
 		user.Email = email
 		return nil
 	}, func(user *user.User) {
@@ -132,11 +135,11 @@ func (us *UserService) ChangeEmail(userID, email string) error {
 			UserID string `json:"user_id"`
 			Email  string `json:"email"`
 		}{userID, email})
-	}))
+	})
 }
 
 var (
-	counterAuthenticate = NewSuccessFailureCounter("service.Authenticate")
+	metricAuthenticate = NewSuccessFailureMetric("service.Authenticate")
 )
 
 // Authenticate checks whether a user with the given login credentials exists.
@@ -147,50 +150,58 @@ var (
 func (us *UserService) Authenticate(loginName, loginPassword string) (string, error) {
 	log.Printf("call Authenticate('%s', ...)\n", loginName)
 
-	theUser, err := us.UserStorage.FindByLoginName(loginName)
-	if err != nil {
-		counterAuthenticate.Failure()
-		return "", errgo.Mask(err)
-	}
+	var result string
+	err := metricAuthenticate.Run(func() error {
 
-	if us.AuthEmailMustBeVerified {
-		if !theUser.EmailVerified {
-			counterAuthenticate.Failure()
-			return "", UserEmailMustBeVerified
+		theUser, err := us.UserStorage.FindByLoginName(loginName)
+		if err != nil {
+			metricAuthenticate.Failure()
+			return errgo.Mask(err)
 		}
-	}
 
-	passwordMatch := us.Hasher.Verify(loginPassword, theUser.LoginPasswordHash)
-	if !passwordMatch {
-		counterAuthenticate.Failure()
-		return "", InvalidCredentials
-	}
+		if us.AuthEmailMustBeVerified {
+			if !theUser.EmailVerified {
+				metricAuthenticate.Failure()
+				return UserEmailMustBeVerified
+			}
+		}
 
-	needsRehash := us.Hasher.NeedsRehash(theUser.LoginPasswordHash)
-	if needsRehash {
-		theUser.LoginPasswordHash = us.Hasher.Hash(loginPassword)
+		passwordMatch := us.Hasher.Verify(loginPassword, theUser.LoginPasswordHash)
+		if !passwordMatch {
+			metricAuthenticate.Failure()
+			return InvalidCredentials
+		}
 
-		// NOTE: we ignore any error here. Main intent of this function is to provide authentication
-		us.UserStorage.Save(theUser)
-	}
+		needsRehash := us.Hasher.NeedsRehash(theUser.LoginPasswordHash)
+		if needsRehash {
+			theUser.LoginPasswordHash = us.Hasher.Hash(loginPassword)
 
-	us.logEvent("user.authenticated", struct {
-		UserID string `json:"user_id"`
-	}{theUser.ID})
+			// NOTE: we ignore any error here. Main intent of this function is to provide authentication
+			us.UserStorage.Save(theUser)
+		}
 
-	counterAuthenticate.Success()
+		us.logEvent("user.authenticated", struct {
+			UserID string `json:"user_id"`
+		}{theUser.ID})
 
-	return theUser.ID, nil
+		metricAuthenticate.Success()
+
+		// Finish
+		result = theUser.ID
+		return nil
+	})
+	return result, err
+
 }
 
 var (
-	counterSetEmailVerified = NewSuccessFailureCounter("service.SetEmailVerified")
+	metricSetEmailVerified = NewSuccessFailureMetric("service.SetEmailVerified")
 )
 
 func (us *UserService) SetEmailVerified(userID string) error {
 	log.Printf("call SetEmailVerified('%s')\n", userID)
 
-	return counterSetEmailVerified.CountError(us.readModifyWrite(userID, func(user *user.User) error {
+	return us.readModifyWrite(metricSetEmailVerified, userID, func(user *user.User) error {
 		user.EmailVerified = true
 		return nil
 	}, func(user *user.User) {
@@ -198,17 +209,17 @@ func (us *UserService) SetEmailVerified(userID string) error {
 			UserID string `json:"user_id"`
 			Email  string `json:"email"`
 		}{userID, user.Email})
-	}))
+	})
 }
 
 var (
-	counterCheckAndSetEmailVerified = NewSuccessFailureCounter("service.CheckAndSetEmailVerified")
+	metricCheckAndSetEmailVerified = NewSuccessFailureMetric("service.CheckAndSetEmailVerified")
 )
 
 func (us *UserService) CheckAndSetEmailVerified(userID, email string) error {
 	log.Printf("call CheckAndSetEmailVerified('%s', '%s')\n", userID, email)
 
-	return counterCheckAndSetEmailVerified.CountError(us.readModifyWrite(userID, func(user *user.User) error {
+	return us.readModifyWrite(metricCheckAndSetEmailVerified, userID, func(user *user.User) error {
 		if user.Email != email {
 			return InvalidVerificationEmail
 		}
@@ -219,31 +230,33 @@ func (us *UserService) CheckAndSetEmailVerified(userID, email string) error {
 			UserID string `json:"user_id"`
 			Email  string `json:"email"`
 		}{userID, email})
-	}))
+	})
 }
 
 // readModifyWrite reads the user with the given userID, applies modifier to it, saves the result
 // and calls all success function if no error occured.
-func (us *UserService) readModifyWrite(userID string, modifier func(user *user.User) error, success ...func(user *user.User)) error {
-	user, err := us.UserStorage.Get(userID)
-	if err != nil {
-		return errgo.Mask(err)
-	}
+func (us *UserService) readModifyWrite(m SuccessFailureMetric, userID string, modifier func(user *user.User) error, success ...func(user *user.User)) error {
+	return m.Run(func() error {
+		user, err := us.UserStorage.Get(userID)
+		if err != nil {
+			return errgo.Mask(err)
+		}
 
-	err = modifier(&user)
-	if err != nil {
-		return errgo.Mask(err)
-	}
+		err = modifier(&user)
+		if err != nil {
+			return errgo.Mask(err)
+		}
 
-	err = us.UserStorage.Save(user)
-	if err != nil {
-		return errgo.Mask(err)
-	}
+		err = us.UserStorage.Save(user)
+		if err != nil {
+			return errgo.Mask(err)
+		}
 
-	for _, f := range success {
-		f(&user)
-	}
-	return nil
+		for _, f := range success {
+			f(&user)
+		}
+		return nil
+	})
 }
 
 // logEvent serializes the entry with `encoding/json` and writes it to the us.EventStream
