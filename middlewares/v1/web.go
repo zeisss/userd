@@ -32,8 +32,6 @@ func NewUserAPIHandler(userService *service.UserService) http.Handler {
 
 	mux.Methods("POST").Path("/v1/user/authenticate").Handler(&AuthenticationHandler{base})
 
-	mux.Methods("GET").Path("/").Handler(&WelcomeHandler{base})
-
 	return mux
 }
 
@@ -225,7 +223,6 @@ func (h *AuthenticationHandler) ServeHTTP(resp http.ResponseWriter, req *http.Re
 		resp.WriteHeader(http.StatusOK)
 		resp.Write([]byte(userID))
 	}
-
 }
 
 // ----------------------------------------------
@@ -260,17 +257,4 @@ func (h *VerifyEmailHandler) Email(req *http.Request) (string, bool) {
 		return "", false
 	}
 	return email[0], true
-}
-
-// --------------------------------------------------------------------------------------------
-
-type WelcomeHandler struct{ BaseHandler }
-
-func (h *WelcomeHandler) ServeHTTP(resp http.ResponseWriter, req *http.Request) {
-	result := struct {
-		Message string `json:"message"`
-	}{
-		"Welcome! This is userd.",
-	}
-	httputil.WriteJSONResponse(resp, http.StatusOK, result)
 }

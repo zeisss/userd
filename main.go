@@ -1,6 +1,7 @@
 package main
 
 import (
+	"./middlewares"
 	"./middlewares/v1"
 	"./service"
 	"./service/eventstream"
@@ -13,6 +14,7 @@ import (
 
 	flag "github.com/ogier/pflag"
 
+	"net/http"
 	"os"
 )
 
@@ -117,6 +119,8 @@ func main() {
 
 	userService := service.UserService{dependencies, config}
 
-	handler := v1.NewUserAPIHandler(&userService)
-	starter.StartHttpInterface(handler)
+	mux := http.NewServeMux()
+	mux.Handle("/", middlewares.WelcomeHandler{})
+	mux.Handle("/v1/", v1.NewUserAPIHandler(&userService))
+	starter.StartHttpInterface(mux)
 }
