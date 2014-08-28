@@ -61,11 +61,12 @@ func (d *EtcdStorageDriver) Index(name string) keyValueIndex {
 // Set writes the json with data
 func (d *EtcdStorageDriver) Set(userID, json string) error {
 	key := d.Path("user", userID)
-	return errgo.Mask(d.write(key, json))
+	_, err := d.client.Set(key, json, d.ttl)
+	return errgo.Mask(err)
 }
 
-func (d *EtcdStorageDriver) write(key, value string) error {
-	_, err := d.client.Set(key, string(value), d.ttl)
+func (d *EtcdStorageDriver) create(key, value string) error {
+	_, err := d.client.Create(key, string(value), d.ttl)
 	return errgo.Mask(err)
 }
 
@@ -114,7 +115,7 @@ type EtcdIndex struct {
 
 func (s *EtcdIndex) Put(key, userID string) error {
 	path := s.Storage.Path(s.Name, key)
-	return errgo.Mask(s.Storage.write(path, userID))
+	return errgo.Mask(s.Storage.create(path, userID))
 }
 
 func (s *EtcdIndex) Remove(key string) error {

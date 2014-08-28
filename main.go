@@ -27,10 +27,10 @@ var (
 	backendStorage         = flag.String("storage", "memory", "Data storage: memory, redis or etcd")
 	storageEtcdPeers       = flag.String("storage-etcd-peers", "http://localhost:4001/", "The peers to connect to (comma separated).")
 	storageEtcdPrefix      = flag.String("storage-etcd-prefix", "moinz.de/userd", "The path prefix to use with Etcd.")
-	storageEtcdLogCURL     = flag.Bool("storage-etcd-log-curl", true, "Log calls to ETCD as curl commands to stdout.")
+	storageEtcdLogCURL     = flag.Bool("storage-etcd-log-curl", false, "Log calls to ETCD as curl commands to stdout.")
 	storageEtcdLogFile     = flag.String("storage-etcd-log", "", "Filepath to write etcd debug log. Use - for stdout.")
 	storageEtcdSyncCluster = flag.Bool("storage-etcd-sync-cluster", false, "Call SyncCluster initially to fetch all available nodes.")
-	storageEtcdTtl         = flag.Uint64("storage-etcd-ttl", 365*24*60*60, "The TTL to use when creating entries in Etcd.")
+	storageEtcdTtl         = flag.Uint64("storage-etcd-ttl", 0, "The TTL to use when creating entries in Etcd. 0 = no ttl")
 )
 
 func UserStorage() service.UserStorage {
