@@ -95,7 +95,7 @@ func PasswordHasher() service.PasswordHasher {
 // ------------------------------------------------------------------------------
 
 var (
-	switchEventStream = flag.String("eventstream", "none", "Should events be logged? Use log, cores, redis or none")
+	switchEventStreams = flag.String("eventstreams", "none", "Should events be logged? Use log, cores, redis or none")
 
 	eventstreamRedisPrefix = flag.String("eventstream-redis-prefix", "", "A prefix to include into the queue/channel name")
 	eventstreamRedisPubSub = flag.Bool("eventstream-redis-pubsub", false, "Use PUBLISH instead of RPUSH to send the message")
@@ -108,18 +108,31 @@ var (
 )
 
 func EventStream() service.EventStream {
-	switch *switchEventStream {
-	case "redis":
-		return eventstream.NewRedisEventStream(RedisPool(), *eventstreamRedisPrefix, *eventstreamRedisPubSub)
-	case "cores":
-		return eventstream.NewCoresAmqpEventLog(*eventstreamCoresUrl, *eventstreamCoresPrefix)
-	case "log":
-		return eventstream.NewFileLogEventStream(*eventstreamLogFile, os.FileMode(*eventstreamLogMode))
-	case "none":
+	streams := strings.Split(*switchEventStreams, ",")
+
+	if len(streams) == 0 {
 		return eventstream.NewNoneEventLog()
-	default:
-		panic("Unknown -eventstream value: " + *switchEventStream)
 	}
+
+	broadcaster := eventstream.NewBroadcaster()
+	for _, name := range streams {
+		var newStream eventstream.Stream
+		switch name {
+		case "redis":
+			newStream = eventstream.NewRedisEventStream(RedisPool(), *eventstreamRedisPrefix, *eventstreamRedisPubSub)
+		case "cores":
+			newStream = eventstream.NewCoresAmqpEventLog(*eventstreamCoresUrl, *eventstreamCoresPrefix)
+		case "log":
+			newStream = eventstream.NewFileLogEventStream(*eventstreamLogFile, os.FileMode(*eventstreamLogMode))
+		case "none":
+			newStream = eventstream.NewNoneEventLog()
+		default:
+			panic("Unknown -eventstream value: " + name)
+		}
+
+		broadcaster.AddStream(newStream)
+	}
+	return broadcaster
 }
 
 // ------------------------------------------------------------------------------

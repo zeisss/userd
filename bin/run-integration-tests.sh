@@ -32,10 +32,17 @@ function cleanup() {
 }
 
 function run_suites() {
+	# eventstreams
+	run_test_suite "--auth-email=true --eventstreams=log" ".+Integration.+__Suite(All|AuthEmailTrue)" $*
+	run_test_suite "--auth-email=false --eventstreams=log" ".+Integration.+__Suite(All|AuthEmailFalse)" $*
 
-	run_test_suite "--auth-email=true --eventstream=log" ".+Integration.+__Suite(All|AuthEmailTrue)" $*
-	run_test_suite "--auth-email=false --eventstream=log" ".+Integration.+__Suite(All|AuthEmailFalse)" $*
+	if [ ! -z $RABBITMQ ]; then 
+		run_test_suite "--auth-email=true --eventstreams=cores --eventstream-cores-url=$RABBITMQ" ".+Integration.+__Suite(All|AuthEmailTrue)" $*
+		run_test_suite "--auth-email=false --eventstreams=cores --eventstream-cores-url=$RABBITMQ" ".+Integration.+__Suite(All|AuthEmailFalse)" $*
 
+	fi
+
+	# storages
 	run_test_suite "--auth-email=true" ".+Integration.+__Suite(All|AuthEmailTrue)" $*
 	run_test_suite "--auth-email=false" ".+Integration.+__Suite(All|AuthEmailFalse)" $*
 
