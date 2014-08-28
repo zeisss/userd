@@ -9,4 +9,14 @@ if [ ! -z "$REDIS_PORT" ]; then
 	OPTS="$OPTS -storage=redis"
 fi
 
+# If a ETCD backend is detected, activate all kinds of etcd backends
+if [ ! -z "$ETCD_PORT" ]; then
+  ETCD_PORT="http://$COREOS_PRIVATE_IPV4:$ETCD_PORT"
+
+	echo "Using etcd storage with peer=$ETCD_PEER"
+	OPTS="$OPTS -storage-etcd-peer=$ETCD_PEER"
+	OPTS="$OPTS -storage-etcd-prefix=userd"
+	OPTS="$OPTS -storage=etcd"
+fi
+
 exec /opt/userd $OPTS $*
