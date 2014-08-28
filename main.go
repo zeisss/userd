@@ -144,13 +144,17 @@ func main() {
 
 	userService := service.UserService{dependencies, config}
 
+	// v1.
 	mux := http.NewServeMux()
 	mux.Handle("/", middlewares.WelcomeHandler{})
 	mux.Handle("/v1/", v1.NewUserAPIHandler(&userService))
 
+	// v2.
 	srv := NewMiddlewareServer(starter)
 	v2 := NewV2Middleware(starter, &userService)
 	v2.SetupRoutes(srv)
+	srv.RegisterRoutes(mux)
 
+	// Start HTTP server.
 	starter.StartHttpInterface(mux)
 }

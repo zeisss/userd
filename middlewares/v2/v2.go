@@ -15,5 +15,5 @@ type V2 struct {
 }
 
 func (v2 *V2) SetupRoutes(srv *middlewarePkg.Server) {
-	srv.Serve("POST", "/v1/user/{userOrMail}/login", v2.LoginUser)
+	srv.Serve("POST", "/v2/user/{userOrMail}/login", v2.LoginUser)
 }
