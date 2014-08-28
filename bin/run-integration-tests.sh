@@ -12,6 +12,10 @@ function run_test_suite() {
 	echo "================================"
 	echo
 
+	echo "===================================" >> $LOG_FILE
+	echo "= ARGS: ${args}" >> $LOG_FILE
+	echo >> $LOG_FILE
+	
 	./userd ${DEFAULT_ARGS} ${args} >> ${LOG_FILE} 2>&1 &
 	local PID=$!
 
@@ -38,6 +42,11 @@ function run_suites() {
 	if [ ! -z $REDIS ]; then
 		run_test_suite "--auth-email=true --storage=redis --redis-address=$REDIS" ".+Integration.+__Suite(All|AuthEmailTrue)" $*
 		run_test_suite "--auth-email=false --storage=redis --redis-address=$REDIS" ".+Integration.+__Suite(All|AuthEmailFalse)" $*
+	fi
+
+	if [ ! -z $ETCD ]; then
+		run_test_suite "--auth-email=true --storage=etcd --storage-etcd-peer=$ETCD" ".+Integration.+__Suite(All|AuthEmailTrue)" $*
+		run_test_suite "--auth-email=false --storage=etcd --storage-etcd-peer=$ETCD" ".+Integration.+__Suite(All|AuthEmailFalse)" $*
 	fi
 
 }
