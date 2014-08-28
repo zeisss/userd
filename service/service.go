@@ -149,9 +149,9 @@ func (us *UserService) Authenticate(loginName, loginPassword string) (string, er
 		us.UserStorage.Save(theUser)
 	}
 
-	us.logEvent("user.authenticated", struct {
-		UserID string `json:"user_id"`
-	}{theUser.ID})
+	us.logEvent("user.authenticated", map[string]string{
+		"user_id": theUser.ID,
+	})
 
 	return theUser.ID, nil
 }

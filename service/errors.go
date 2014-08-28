@@ -18,21 +18,26 @@ var (
 )
 
 func IsNotFoundError(err error) bool {
-	return err == storage.UserNotFound
+	return errgo.Cause(err) == storage.UserNotFound
 }
 
 func IsEmailAlreadyTakenError(err error) bool {
-	return err == storage.EmailAlreadyTaken
+	return errgo.Cause(err) == storage.EmailAlreadyTaken
 }
 
 func IsLoginNameAlreadyTakenError(err error) bool {
-	return err == storage.LoginNameAlreadyTaken
+	return errgo.Cause(err) == storage.LoginNameAlreadyTaken
 }
 
 func IsUserEmailMustBeVerifiedError(err error) bool {
-	return err == UserEmailMustBeVerified
+	return errgo.Cause(err) == UserEmailMustBeVerified
+}
+
+func IsInvalidCredentials(err error) bool {
+	return errgo.Cause(err) == InvalidCredentials
 }
 
 func IsServiceError(err error) bool {
-	return err == InvalidArguments || err == InvalidCredentials || err == InvalidVerificationEmail
+	err = errgo.Cause(err)
+	return err == InvalidArguments || IsInvalidCredentials(err) || err == InvalidVerificationEmail
 }
