@@ -11,7 +11,7 @@ Environment="NAME=%p-%i.service"
 
 ExecStartPre=/usr/bin/docker pull $IMAGE
 ExecStartPre=/bin/sh -c "docker rm -f $NAME || true"
-ExecStart=/usr/bin/docker run --rm -e "ETCD_PORT=4001" -p ${COREOS_PRIVATE_IPV4}::8080 --name $NAME $IMAGE
+ExecStart=/usr/bin/docker run --rm -e "ETCD_PEER=http://${COREOS_PRIVATE_IPV4}:4001" -p ${COREOS_PRIVATE_IPV4}::8080 --name $NAME $IMAGE
 ExecStop=-/usr/bin/docker kill $NAME
 
 Restart=always

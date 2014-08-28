@@ -53,14 +53,12 @@ cat deployment/units/userd\@.template | \
   sed -e "s,\%\%USERD_VERSION\%\%,$USERD_VERSION,g" \
   > deployment/units/userd\@.service
 
-fleetctl destroy deployment/units/userd-presence@1
-fleetctl destroy deployment/units/userd@1
-fleetctl start deployment/units/userd@1
-fleetctl start deployment/units/userd-presence@1
-fleetctl destroy deployment/units/userd-presence@2
-fleetctl destroy deployment/units/userd@2
-fleetctl start deployment/units/userd@2
-fleetctl start deployment/units/userd-presence@2
+for $i in $(seq 2); do
+  fleetctl destroy deployment/units/userd-presence@${i}
+  fleetctl destroy deployment/units/userd@${1}
+  fleetctl start deployment/units/userd@${1}
+  fleetctl start deployment/units/userd-presence@${1}
+done
 
 # cleanup
 rm deployment/units/userd\@.service
