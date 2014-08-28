@@ -14,21 +14,23 @@ import (
 
 	flag "github.com/ogier/pflag"
 
+	"log"
 	"net/http"
 	"os"
+	"strings"
 )
 
 // ------------------------------------------------------------------------------
 
 var (
 	// Backend Switches
-	backendStorage = flag.String("storage", "memory", "Data storage: memory, redis or etcd")
-
-	// Backend - Storage
-	/// Etcd
-	storageEtcdPeer   = flag.String("storage-etcd-peer", "http://localhost:4001/", "The peer to connect to.")
-	storageEtcdPrefix = flag.String("storage-etcd-prefix", "moinz.de/userd", "The path prefix to use with Etcd.")
-	storageEtcdTtl    = flag.Uint64("storage-etcd-ttl", 365*24*60*60, "The TTL to use when creating entries in Etcd.")
+	backendStorage         = flag.String("storage", "memory", "Data storage: memory, redis or etcd")
+	storageEtcdPeers       = flag.String("storage-etcd-peers", "http://localhost:4001/", "The peers to connect to (comma separated).")
+	storageEtcdPrefix      = flag.String("storage-etcd-prefix", "moinz.de/userd", "The path prefix to use with Etcd.")
+	storageEtcdLogCURL     = flag.Bool("storage-etcd-log-curl", true, "Log calls to ETCD as curl commands to stdout.")
+	storageEtcdLogFile     = flag.String("storage-etcd-log", "", "Filepath to write etcd debug log. Use - for stdout.")
+	storageEtcdSyncCluster = flag.Bool("storage-etcd-sync-cluster", false, "Call SyncCluster initially to fetch all available nodes.")
+	storageEtcdTtl         = flag.Uint64("storage-etcd-ttl", 365*24*60*60, "The TTL to use when creating entries in Etcd.")
 )
 
 func UserStorage() service.UserStorage {
@@ -36,7 +38,23 @@ func UserStorage() service.UserStorage {
 	case "redis":
 		return storage.NewRedisStorage(RedisPool())
 	case "etcd":
-		return storage.NewEtcdStorage(*storageEtcdPeer, *storageEtcdPrefix, *storageEtcdTtl)
+		var etcdLog *log.Logger
+
+		switch *storageEtcdLogFile {
+		case "":
+			etcdLog = nil
+		case "-":
+			etcdLog = log.New(os.Stdout, "etcd", log.LstdFlags)
+		default:
+			out, err := os.OpenFile(*storageEtcdLogFile, os.O_WRONLY, os.FileMode(0700))
+			if err != nil {
+				panic(err)
+			}
+			etcdLog = log.New(out, "etcd", log.LstdFlags)
+		}
+
+		peers := strings.Split(*storageEtcdPeers, ",")
+		return storage.NewEtcdStorage(peers, *storageEtcdPrefix, *storageEtcdTtl, *storageEtcdSyncCluster, *storageEtcdLogCURL, etcdLog)
 	case "memory":
 		return storage.NewLocalStorage()
 	default:

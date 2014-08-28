@@ -45,7 +45,7 @@ type BaseHandler struct {
 func (base *BaseHandler) writeProcessingError(resp http.ResponseWriter, err error) {
 	httputil.WriteJSONErrorPage(resp, http.StatusInternalServerError, "An Internal Error occured. Please try again later.")
 
-	log.Printf("Internal error: %v\n", err)
+	log.Printf("Internal error: %#v\n", err)
 }
 
 func (base *BaseHandler) UserID(req *http.Request) (string, bool) {
