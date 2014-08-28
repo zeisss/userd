@@ -11,16 +11,31 @@ type Dependencies struct {
 	IdFactory   IdFactory
 	Hasher      PasswordHasher
 	UserStorage UserStorage
+
+	// EventStream.Publish() is called for every succesfull event in the UserService. Should also forward to EventCollector.
 	EventStream EventStream
 }
 
 type Config struct {
 	AuthEmailMustBeVerified bool
+	MaxItems                int
+}
+
+func NewUserService(config Config, deps Dependencies) *UserService {
+	return &UserService{
+		Dependencies: deps,
+		Config:       config,
+
+		EventCollector: NewEventCollector(config.MaxItems),
+	}
 }
 
 type UserService struct {
 	Dependencies
 	Config
+
+	// EventCollector is used by any consumer of the UserService which needs access to the previous events.
+	EventCollector *EventCollector
 }
 
 func (us *UserService) CreateUser(profileName, email, loginName, loginPassword string) (string, error) {
@@ -228,5 +243,6 @@ func (us *UserService) logEvent(tag string, entry interface{}) {
 		// Our own data structs should always be jsonizable - if not we have a bug
 		panic(err)
 	}
-	us.EventStream.Publish(tag, data)
+	go us.EventStream.Publish(tag, data)
+	go us.EventCollector.publish(tag, data)
 }

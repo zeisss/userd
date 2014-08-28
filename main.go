@@ -107,15 +107,15 @@ var (
 	eventstreamCoresPrefix = flag.String("eventstream-cores-prefix", "", "A prefix to include into the routing key")
 )
 
-func EventStream() service.EventStream {
-	streams := strings.Split(*switchEventStreams, ",")
+func EventStreams() *eventstream.Broadcaster {
+	streamNames := strings.Split(*switchEventStreams, ",")
+	broadcaster := eventstream.NewBroadcaster()
 
-	if len(streams) == 0 {
-		return eventstream.NewNoneEventLog()
+	if len(streamNames) == 0 {
+		return broadcaster
 	}
 
-	broadcaster := eventstream.NewBroadcaster()
-	for _, name := range streams {
+	for _, name := range streamNames {
 		var newStream eventstream.Stream
 		switch name {
 		case "redis":
@@ -136,22 +136,24 @@ func EventStream() service.EventStream {
 }
 
 // ------------------------------------------------------------------------------
+// ------------------------------------------------------------------------------
 
 var (
-	authEmail = flag.Bool("auth-email", true, "Must the email adress be verified for an authentication to succeed.")
+	authEmail              = flag.Bool("auth-email", true, "Must the email adress be verified for an authentication to succeed.")
+	eventCollectorMaxItems = flag.Int("feed-max-items", 1000, "Maximum items to keep in feed.")
 )
 
 func main() {
 	starter := httpcli.NewStarterFromFlagSet(flag.CommandLine)
 	flag.Parse()
 
-	dependencies := service.Dependencies{IdFactory(), PasswordHasher(), UserStorage(), EventStream()}
-	config := service.Config{*authEmail}
+	dependencies := service.Dependencies{IdFactory(), PasswordHasher(), UserStorage(), EventStreams()}
+	config := service.Config{*authEmail, *eventCollectorMaxItems}
 
-	userService := service.UserService{dependencies, config}
+	userService := service.NewUserService(config, dependencies)
 
 	mux := http.NewServeMux()
 	mux.Handle("/", middlewares.WelcomeHandler{})
-	mux.Handle("/v1/", v1.NewUserAPIHandler(&userService))
+	mux.Handle("/v1/", v1.NewUserAPIHandler(userService))
 	starter.StartHttpInterface(mux)
 }
