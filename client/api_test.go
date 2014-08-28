@@ -1,53 +1,54 @@
 package client
 
 import (
-	"fmt"
 	"testing"
+
+	"strings"
+
+	"github.com/manveru/faker"
 )
 
 const (
 	Password = "secret"
 )
 
-func ExampleApiCreateAndReadUser() {
-	userID, err := ApiCreateUser("CEO", "ceo@acme.com", "CEO", "secret-passphrase")
+var (
+	Builder = UserdBuilder{}
+)
+
+func init() {
+	fake, err := faker.New("en")
 	if err != nil {
 		panic(err)
 	}
-
-	user, err := ApiGetUser(userID)
-	if err != nil {
-		panic(err)
-	}
-
-	fmt.Printf("Profile Name: %s\n", user.ProfileName)
-	fmt.Printf("Email: %s\n", user.Email)
-
-	// Output:
-	// Profile Name: CEO
-	// Email: ceo@acme.com
+	Builder.Fake = fake
 }
-
 func TestIntegrationApiCreateUser__SuiteAll(t *testing.T) {
-	RunApiCreateUser(t, "CreateUserTest")
+	Builder.givenNewUser(t)
 }
 
 func TestIntegrationReadUser__SuiteAll(t *testing.T) {
-	userResult := RunApiCreateUser(t, "ReadUserTest")
+	userResult := Builder.givenNewUser(t)
 
 	user, err := ApiGetUser(userResult.userID)
 	if err != nil {
 		t.Fatalf("Failed to read user from service: %v", err)
 	}
-	if user.ProfileName != "ReadUserTest" {
+	if user.ProfileName != userResult.UserName {
 		t.Fatalf("Failed to read profile name from service: %s", user.ProfileName)
+	}
+	if user.Email != userResult.Email {
+		t.Fatalf("Email differs")
+	}
+	if user.LoginName != userResult.LoginName {
+		t.Fatalf("LoginName differs")
 	}
 }
 
 func TestIntegrationAuth__SuiteAll(t *testing.T) {
-	userResult := RunApiCreateAndVerifyUser(t, "TestAuth")
+	userResult := Builder.givenNewVerifiedUser(t)
 
-	userId, err := ApiAuthenticate("TestAuth", Password)
+	userId, err := ApiAuthenticate(userResult.LoginName, Password)
 	if err != nil {
 		t.Fatalf("Failed to perform auth: %v", err)
 	}
@@ -57,9 +58,10 @@ func TestIntegrationAuth__SuiteAll(t *testing.T) {
 }
 
 func TestIntegrationChangeProfileName__SuiteAll(t *testing.T) {
-	userResult := RunApiCreateUser(t, "ChangeProfileName")
+	userResult := Builder.givenNewUser(t)
+	newName := Builder.Fake.Name()
 
-	if err := ApiChangeProfileName(userResult.userID, "ChangeProfileNameChanged"); err != nil {
+	if err := ApiChangeProfileName(userResult.userID, newName); err != nil {
 		t.Fatalf("Failed to change profile name: %v", err)
 	}
 
@@ -67,19 +69,20 @@ func TestIntegrationChangeProfileName__SuiteAll(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to read user: %v", err)
 	}
-	if user.ProfileName != "ChangeProfileNameChanged" {
+	if user.ProfileName != newName {
 		t.Fatalf("Profile Name was not changed!")
 	}
 }
 
 func TestIntegrationChangeLoginCredentials__SuiteAll(t *testing.T) {
-	userResult := RunApiCreateAndVerifyUser(t, "TestChangeLoginCredentials")
+	userResult := Builder.givenNewVerifiedUser(t)
+	newName := Builder.Fake.UserName()
 
-	if err := ApiChangeLoginCredentials(userResult.userID, "TestChangeLoginCredentialsChanged", "new_secret"); err != nil {
+	if err := ApiChangeLoginCredentials(userResult.userID, newName, "new_secret"); err != nil {
 		t.Fatalf("Failed to change profile name: %v", err)
 	}
 
-	userID, err := ApiAuthenticate("TestChangeLoginCredentialsChanged", "new_secret")
+	userID, err := ApiAuthenticate(newName, "new_secret")
 	if err != nil {
 		t.Fatalf("Failed to read user: %v", err)
 	}
@@ -88,10 +91,27 @@ func TestIntegrationChangeLoginCredentials__SuiteAll(t *testing.T) {
 	}
 }
 
-func TestIntegrationAuthSucceedsUnverified__SuiteAuthEmailFalse(t *testing.T) {
-	userResult := RunApiCreateUser(t, "AuthFailsUnauthenticated")
+func TestIntegrationChangeEmail__SuiteAll(t *testing.T) {
+	userResult := Builder.givenNewVerifiedUser(t)
+	newEmail := Builder.Fake.Email()
 
-	userID, err := ApiAuthenticate("AuthFailsUnauthenticated", Password)
+	if err := ApiChangeEmail(userResult.userID, newEmail); err != nil {
+		t.Fatalf("Failed to change email: %v", err)
+	}
+
+	user, err := ApiGetUser(userResult.userID)
+	if err != nil {
+		t.Fatalf("Failed to read user: %v", err)
+	}
+	if user.Email != newEmail {
+		t.Fatalf("Expected new email '%s', but got '%s'", newEmail, user.Email)
+	}
+}
+
+func TestIntegrationAuthSucceedsUnverified__SuiteAuthEmailFalse(t *testing.T) {
+	userResult := Builder.givenNewUser(t)
+
+	userID, err := ApiAuthenticate(userResult.LoginName, Password)
 	if err != nil {
 		t.Fatalf("Failed to auth: %v", err)
 	}
@@ -101,37 +121,53 @@ func TestIntegrationAuthSucceedsUnverified__SuiteAuthEmailFalse(t *testing.T) {
 }
 
 func TestIntegrationAuthFailsUnverified__SuiteAuthEmailTrue(t *testing.T) {
-	_ = RunApiCreateUser(t, "AuthFailsUnauthenticated")
+	user := Builder.givenNewUser(t)
 
-	_, err := ApiAuthenticate("AuthFailsUnauthenticated", Password)
+	_, err := ApiAuthenticate(user.LoginName, Password)
 	if err == nil {
 		t.Fatalf("Expected email-not-verified error, got nil")
 	}
-	if err.Error() != "Email must be verified to authenticate." {
-		t.Fatalf("Expected 'Email must be verified to authenticate.', got '%s'", err.Error())
+
+	expected := "{\"msg\":\"Email must be verified to authenticate.\"}"
+	if strings.TrimSpace(err.Error()) != expected {
+		t.Fatalf("Expected '%s', got '%s'", expected, err.Error())
 	}
 }
 
 // ----------------------------------------------------
-
-type ApiCreateUserResult struct {
-	userID string
+type UserdBuilder struct {
+	Fake *faker.Faker
 }
 
-func RunApiCreateUser(t *testing.T, username string) ApiCreateUserResult {
-	userID, err := ApiCreateUser(username, username+"@moinz.de", username, Password)
+type ApiCreateUserResult struct {
+	userID    string
+	Email     string
+	UserName  string
+	LoginName string
+}
+
+func (b *UserdBuilder) givenNewUser(t *testing.T) ApiCreateUserResult {
+	user := ApiCreateUserResult{
+		userID:    "",
+		Email:     b.Fake.FreeEmail(),
+		UserName:  b.Fake.UserName(),
+		LoginName: b.Fake.UserName(),
+	}
+	var err error
+
+	user.userID, err = ApiCreateUser(user.UserName, user.Email, user.LoginName, Password)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if userID == "" {
+	if user.userID == "" {
 		t.Fatalf("Received empty string instead of userID.")
 	}
 
-	return ApiCreateUserResult{userID}
+	return user
 }
 
-func RunApiCreateAndVerifyUser(t *testing.T, username string) ApiCreateUserResult {
-	user := RunApiCreateUser(t, username)
+func (b *UserdBuilder) givenNewVerifiedUser(t *testing.T) ApiCreateUserResult {
+	user := b.givenNewUser(t)
 
 	err := ApiVerifyEmail(user.userID)
 	if err != nil {

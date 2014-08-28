@@ -15,6 +15,7 @@ import (
 
 var (
 	MaskError = errgo.MaskFunc(
+		service.IsServiceError,
 		service.IsNotFoundError, service.IsEmailAlreadyTakenError,
 		service.IsLoginNameAlreadyTakenError, service.IsUserEmailMustBeVerifiedError,
 	)
@@ -45,7 +46,7 @@ type BaseHandler struct {
 }
 
 func (base *BaseHandler) writeProcessingError(resp http.ResponseWriter, err error) {
-	resp.WriteHeader(http.StatusInternalServerError)
+	httputil.WriteJSONErrorPage(resp, http.StatusInternalServerError, "An Internal Error occured. Please try again later.")
 
 	log.Printf("Internal error: %v\n", err)
 }
@@ -62,7 +63,7 @@ func (base *BaseHandler) handleProcessingError(resp http.ResponseWriter, req *ht
 	err = errgo.Cause(err)
 	if service.IsNotFoundError(err) {
 		httputil.WriteNotFound(resp)
-	} else if service.IsEmailAlreadyTakenError(err) || service.IsLoginNameAlreadyTakenError(err) {
+	} else if service.IsEmailAlreadyTakenError(err) || service.IsLoginNameAlreadyTakenError(err) || service.IsServiceError(err) {
 		httputil.WriteBadRequest(resp, req, err.Error())
 	} else if err == service.InvalidCredentials {
 		httputil.WriteBadRequest(resp, req)

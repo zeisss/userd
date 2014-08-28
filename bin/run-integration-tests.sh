@@ -35,6 +35,11 @@ function run_suites() {
 	run_test_suite "--auth-email=true" ".+Integration.+__Suite(All|AuthEmailTrue)" $*
 	run_test_suite "--auth-email=false" ".+Integration.+__Suite(All|AuthEmailFalse)" $*
 
+	if [ ! -z $REDIS ]; then
+		run_test_suite "--auth-email=true --storage=redis --redis-address=$REDIS" ".+Integration.+__Suite(All|AuthEmailTrue)" $*
+		run_test_suite "--auth-email=false --storage=redis --redis-address=$REDIS" ".+Integration.+__Suite(All|AuthEmailFalse)" $*
+	fi
+
 }
 
 LOG_FILE=/tmp/userd-test.log

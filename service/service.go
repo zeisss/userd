@@ -3,17 +3,8 @@ package service
 import (
 	"./user"
 
-	"github.com/juju/errgo"
-
 	"encoding/json"
-	"errors"
 	"log"
-)
-
-var (
-	InvalidCredentials       = errors.New("Invalid credentials.")
-	InvalidVerificationEmail = errors.New("Email adress does not match current email for user.")
-	UserEmailMustBeVerified  = errors.New("Email must be verified to authenticate.")
 )
 
 type Dependencies struct {
@@ -37,6 +28,9 @@ var (
 )
 
 func (us *UserService) CreateUser(profileName, email, loginName, loginPassword string) (string, error) {
+	if profileName == "" || email == "" || loginName == "" || loginPassword == "" {
+		return "", InvalidArguments
+	}
 	log.Printf("call CreateUser('%s', '%s', ..)\n", profileName, email)
 
 	var result string = ""
@@ -58,7 +52,7 @@ func (us *UserService) CreateUser(profileName, email, loginName, loginPassword s
 		err := us.UserStorage.Save(theUser)
 
 		if err != nil {
-			return errgo.Mask(err)
+			return Mask(err)
 		}
 
 		us.logEvent("user.created", struct {
@@ -81,7 +75,7 @@ func (us *UserService) GetUser(id string) (user.User, error) {
 	log.Printf("call GetUser('%s')\n", id)
 	user, err := us.UserStorage.Get(id)
 	metricGetUser.CountError(err)
-	return user, errgo.Mask(err)
+	return user, Mask(err)
 }
 
 var (
@@ -89,7 +83,10 @@ var (
 )
 
 func (us *UserService) ChangeLoginCredentials(userID, newLogin, newPassword string) error {
-	log.Printf("call ChangePassword('%s', ..)\n", userID)
+	if userID == "" || newLogin == "" || newPassword == "" {
+		return InvalidArguments
+	}
+	log.Printf("call ChangeLoginCredentials('%s', ..)\n", userID)
 
 	return us.readModifyWrite(metricChangeLoginCredentials, userID, func(user *user.User) error {
 		user.LoginName = newLogin
@@ -107,6 +104,9 @@ var (
 )
 
 func (us *UserService) ChangeProfileName(userID, profileName string) error {
+	if userID == "" || profileName == "" {
+		return InvalidArguments
+	}
 	log.Printf("call ChangeProfileName('%s', '%s')\n", userID, profileName)
 
 	return us.readModifyWrite(metricChangeProfileName, userID, func(user *user.User) error {
@@ -125,6 +125,9 @@ var (
 )
 
 func (us *UserService) ChangeEmail(userID, email string) error {
+	if userID == "" || email == "" {
+		return InvalidArguments
+	}
 	log.Printf("call ChangeEmail('%s', '%s')\n", userID, email)
 
 	return us.readModifyWrite(metricChangeEmail, userID, func(user *user.User) error {
@@ -148,15 +151,17 @@ var (
 // Error Helpers
 //
 func (us *UserService) Authenticate(loginName, loginPassword string) (string, error) {
+	if loginName == "" || loginPassword == "" {
+		return "", InvalidArguments
+	}
 	log.Printf("call Authenticate('%s', ...)\n", loginName)
 
 	var result string
 	err := metricAuthenticate.Run(func() error {
-
 		theUser, err := us.UserStorage.FindByLoginName(loginName)
 		if err != nil {
 			metricAuthenticate.Failure()
-			return errgo.Mask(err)
+			return Mask(err)
 		}
 
 		if us.AuthEmailMustBeVerified {
@@ -199,6 +204,9 @@ var (
 )
 
 func (us *UserService) SetEmailVerified(userID string) error {
+	if userID == "" {
+		return InvalidArguments
+	}
 	log.Printf("call SetEmailVerified('%s')\n", userID)
 
 	return us.readModifyWrite(metricSetEmailVerified, userID, func(user *user.User) error {
@@ -217,6 +225,9 @@ var (
 )
 
 func (us *UserService) CheckAndSetEmailVerified(userID, email string) error {
+	if userID == "" || email == "" {
+		return InvalidArguments
+	}
 	log.Printf("call CheckAndSetEmailVerified('%s', '%s')\n", userID, email)
 
 	return us.readModifyWrite(metricCheckAndSetEmailVerified, userID, func(user *user.User) error {
@@ -239,17 +250,17 @@ func (us *UserService) readModifyWrite(m SuccessFailureMetric, userID string, mo
 	return m.Run(func() error {
 		user, err := us.UserStorage.Get(userID)
 		if err != nil {
-			return errgo.Mask(err)
+			return Mask(err)
 		}
 
 		err = modifier(&user)
 		if err != nil {
-			return errgo.Mask(err)
+			return Mask(err)
 		}
 
 		err = us.UserStorage.Save(user)
 		if err != nil {
-			return errgo.Mask(err)
+			return Mask(err)
 		}
 
 		for _, f := range success {
