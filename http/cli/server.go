@@ -4,11 +4,26 @@ import (
 	httputil ".."
 
 	"net/http"
+	"strings"
+)
+
+const (
+	DEFAULT_APP_NAME = "userd"
+	DEFAULT_LISTEN   = "localhost:8080"
+
+	DEFAULT_LOG_LEVEL    = "debug"
+	DEFAULT_LOG_REQUESTS = false
+	DEFAULT_USE_HTTPS    = false
 )
 
 type HttpServerStarter struct {
+	AppName       string
+	Host          string
+	Port          string
 	ListenAddress string
-	LogRequests   bool
+
+	LogLevel    string
+	LogRequests bool
 
 	UseHttps             bool
 	HttpsCertificateFile string
@@ -22,18 +37,26 @@ type FlagSet interface {
 
 func NewHttpServerStarter() *HttpServerStarter {
 	return &HttpServerStarter{
-		ListenAddress: "localhost:8080",
+		AppName:       DEFAULT_APP_NAME,
+		ListenAddress: DEFAULT_LISTEN,
 	}
 }
 
 func NewStarterFromFlagSet(flagSet FlagSet) *HttpServerStarter {
 	starter := NewHttpServerStarter()
-	flagSet.StringVar(&starter.ListenAddress, "listen", "localhost:8080", "The address to listen on.")
-	flagSet.BoolVar(&starter.LogRequests, "log-requests", false, "Should requests be logged to stdout")
 
-	flagSet.BoolVar(&starter.UseHttps, "https-enable", false, "Enable HTTPS listening in favor of HTTP.")
+	flagSet.StringVar(&starter.ListenAddress, "listen", DEFAULT_LISTEN, "The address to listen on.")
+	flagSet.BoolVar(&starter.LogRequests, "log-requests", DEFAULT_LOG_REQUESTS, "Should requests be logged to stdout")
+
+	flagSet.BoolVar(&starter.UseHttps, "https-enable", DEFAULT_USE_HTTPS, "Enable HTTPS listening in favor of HTTP.")
 	flagSet.StringVar(&starter.HttpsCertificateFile, "https-certificate", "server.cert", "The certificate to use for SSL.")
 	flagSet.StringVar(&starter.HttpsKeyFile, "https-key", "server.key", "The keyfile to use for SSL.")
+
+	// Set host and port for convinience.
+	splitted := strings.Split(starter.ListenAddress, ":")
+	starter.Host = splitted[0]
+	starter.Port = splitted[1]
+
 	return starter
 }
 

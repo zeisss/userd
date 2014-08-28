@@ -16,7 +16,6 @@ func NewFileLogEventStream(filepath string, mode os.FileMode) *logEventStream {
 		}
 		return NewLogEventStream(out)
 	}
-
 }
 
 func NewLogEventStream(out io.Writer) *logEventStream {
