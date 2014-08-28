@@ -1,0 +1,22 @@
+[Unit]
+Description=Userd Presence
+Requires=userd@%i.service
+After=userd@%i.service
+
+[Service]
+TimeoutStartSec=0
+EnvironmentFile=/etc/environment
+Environment="IMAGE=giantswarm/presence:0.0.12"
+Environment="NAME=%p-%i.service"
+Environment="DEP=userd-%i.service"
+
+ExecStartPre=/usr/bin/docker pull $IMAGE
+ExecStartPre=/bin/sh -c "docker rm -f $NAME || true"
+ExecStart=/usr/bin/docker run --rm -v /run/docker.sock:/run/docker.sock -e "ETCD_PORT_4001_TCP_ADDR=${COREOS_PRIVATE_IPV4}" -e "ETCD_PORT_4001_TCP_PORT=4001" --name $NAME $IMAGE $DEP 8080 userd
+ExecStop=-/usr/bin/docker kill $NAME
+
+Restart=always
+RestartSec=1s
+
+[X-Fleet]
+X-ConditionMachineOf=userd@%i.service
