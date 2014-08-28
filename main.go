@@ -7,12 +7,14 @@ import (
 	"./service/eventstream"
 	"./service/hasher"
 	"./service/idfactory"
-
 	"./service/storage"
 
 	httpcli "./http/cli"
+	v2Pkg "./middlewares/v2"
 
+	middlewarePkg "github.com/catalyst-zero/middleware-server"
 	flag "github.com/ogier/pflag"
+	logPkg "github.com/op/go-logging"
 
 	"net/http"
 	"os"
@@ -106,6 +108,29 @@ func EventStream() service.EventStream {
 
 // ------------------------------------------------------------------------------
 
+func NewMiddlewareServer(ss *httpcli.HttpServerStarter) *middlewarePkg.Server {
+	srv := middlewarePkg.NewServer(ss.Host, ss.Port)
+	srv.SetLogger(NewLogger(ss.AppName, ss.LogLevel))
+	srv.SetAppContext(func() interface{} {
+		return &v2Pkg.Ctx{}
+	})
+
+	return srv
+}
+
+func NewV2Middleware(ss *httpcli.HttpServerStarter, us *service.UserService) *v2Pkg.V2 {
+	return &v2Pkg.V2{
+		Logger:      NewLogger(ss.AppName, ss.LogLevel),
+		UserService: us,
+	}
+}
+
+func NewLogger(name, level string) *logPkg.Logger {
+	return middlewarePkg.NewLogger(middlewarePkg.LoggerOptions{Name: name, Level: level})
+}
+
+// ------------------------------------------------------------------------------
+
 var (
 	authEmail = flag.Bool("auth-email", true, "Must the email adress be verified for an authentication to succeed.")
 )
@@ -119,8 +144,17 @@ func main() {
 
 	userService := service.UserService{dependencies, config}
 
+	// v1.
 	mux := http.NewServeMux()
 	mux.Handle("/", middlewares.WelcomeHandler{})
 	mux.Handle("/v1/", v1.NewUserAPIHandler(&userService))
+
+	// v2.
+	srv := NewMiddlewareServer(starter)
+	v2 := NewV2Middleware(starter, &userService)
+	v2.SetupRoutes(srv)
+	srv.RegisterRoutes(mux)
+
+	// Start HTTP server.
 	starter.StartHttpInterface(mux)
 }
