@@ -49,10 +49,10 @@ func (us *UserService) CreateUser(profileName, email, loginName, loginPassword s
 		return "", Mask(err)
 	}
 
-	us.logEvent("user.created", struct {
-		UserID      string `json:"user_id"`
-		ProfileName string `json:"profile_name"`
-	}{newUserID, profileName})
+	us.logEvent("user.created", map[string]interface{}{
+		"user_id":      newUserID,
+		"profile_name": profileName,
+	})
 
 	return newUserID, nil
 }
@@ -74,9 +74,9 @@ func (us *UserService) ChangeLoginCredentials(userID, newLogin, newPassword stri
 		user.LoginPasswordHash = us.Hasher.Hash(newPassword)
 		return nil
 	}, func(user *user.User) {
-		us.logEvent("user.change_login_credentials", struct {
-			UserID string `json:"user_id"`
-		}{userID})
+		us.logEvent("user.change_login_credentials", map[string]interface{}{
+			"user_id": userID,
+		})
 	})
 }
 
@@ -90,10 +90,10 @@ func (us *UserService) ChangeProfileName(userID, profileName string) error {
 		user.ProfileName = profileName
 		return nil
 	}, func(user *user.User) {
-		us.logEvent("user.change_profile_name", struct {
-			UserID      string `json:"user_id"`
-			ProfileName string `json:"profile_name"`
-		}{userID, profileName})
+		us.logEvent("user.change_profile_name", map[string]interface{}{
+			"user_id":      userID,
+			"profile_name": profileName,
+		})
 	})
 }
 
@@ -107,10 +107,10 @@ func (us *UserService) ChangeEmail(userID, email string) error {
 		user.Email = email
 		return nil
 	}, func(user *user.User) {
-		us.logEvent("user.change_email", struct {
-			UserID string `json:"user_id"`
-			Email  string `json:"email"`
-		}{userID, email})
+		us.logEvent("user.change_email", map[string]interface{}{
+			"user_id": userID,
+			"email":   email,
+		})
 	})
 }
 
@@ -149,9 +149,9 @@ func (us *UserService) Authenticate(loginName, loginPassword string) (string, er
 		us.UserStorage.Save(theUser)
 	}
 
-	us.logEvent("user.authenticated", struct {
-		UserID string `json:"user_id"`
-	}{theUser.ID})
+	us.logEvent("user.authenticated", map[string]interface{}{
+		"user_id": theUser.ID,
+	})
 
 	return theUser.ID, nil
 }
@@ -166,10 +166,10 @@ func (us *UserService) SetEmailVerified(userID string) error {
 		user.EmailVerified = true
 		return nil
 	}, func(user *user.User) {
-		us.logEvent("user.email_verified", struct {
-			UserID string `json:"user_id"`
-			Email  string `json:"email"`
-		}{userID, user.Email})
+		us.logEvent("user.email_verified", map[string]interface{}{
+			"user_id": user.ID,
+			"email":   user.Email,
+		})
 	})
 }
 
@@ -186,10 +186,10 @@ func (us *UserService) CheckAndSetEmailVerified(userID, email string) error {
 		user.EmailVerified = true
 		return nil
 	}, func(user *user.User) {
-		us.logEvent("user.email_verified", struct {
-			UserID string `json:"user_id"`
-			Email  string `json:"email"`
-		}{userID, email})
+		us.logEvent("user.email_verified", map[string]interface{}{
+			"user_id": user.ID,
+			"email":   user.Email,
+		})
 	})
 }
 
