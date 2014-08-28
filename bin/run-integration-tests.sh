@@ -45,8 +45,8 @@ function run_suites() {
 	fi
 
 	if [ ! -z $ETCD ]; then
-		run_test_suite "--auth-email=true --storage=etcd --storage-etcd-peer=$ETCD" ".+Integration.+__Suite(All|AuthEmailTrue)" $*
-		run_test_suite "--auth-email=false --storage=etcd --storage-etcd-peer=$ETCD" ".+Integration.+__Suite(All|AuthEmailFalse)" $*
+		run_test_suite "--auth-email=true --storage=etcd --storage-etcd-peers=$ETCD" ".+Integration.+__Suite(All|AuthEmailTrue)" $*
+		run_test_suite "--auth-email=false --storage=etcd --storage-etcd-peers=$ETCD" ".+Integration.+__Suite(All|AuthEmailFalse)" $*
 	fi
 
 }
