@@ -58,3 +58,15 @@ Performs an authentication with given credentials. If the credentials are valid 
 
 + Response 400
 + Response 404
+
+### GET /v1/feed
+
+Returns all collected events.
+
++ Response 200 (application/json)
+
+		{"message": {"userid": "userid()", "email:" "email()"}, "timestamp": "2014-09-01T23:50:50Z+02:00", "tag": "user.created"}
+		{"message": {"userid": "userid()", "email:" "email()"}, "timestamp": "2014-09-01T23:55:50Z+02:00", "tag": "user.created"}
+		... more events ...
+
+

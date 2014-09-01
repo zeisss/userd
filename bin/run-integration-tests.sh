@@ -12,6 +12,10 @@ function run_test_suite() {
 	echo "================================"
 	echo
 
+	echo "===================================" >> $LOG_FILE
+	echo "= ARGS: ${args}" >> $LOG_FILE
+	echo >> $LOG_FILE
+	
 	./userd ${DEFAULT_ARGS} ${args} >> ${LOG_FILE} 2>&1 &
 	local PID=$!
 
@@ -28,12 +32,29 @@ function cleanup() {
 }
 
 function run_suites() {
+	# eventstreams
+	run_test_suite "--auth-email=true --eventstreams=log" ".+Integration.+__Suite(All|AuthEmailTrue)" $*
+	run_test_suite "--auth-email=false --eventstreams=log" ".+Integration.+__Suite(All|AuthEmailFalse)" $*
 
-	run_test_suite "--auth-email=true --eventstream=log" ".+Integration.+__Suite(All|AuthEmailTrue)" $*
-	run_test_suite "--auth-email=false --eventstream=log" ".+Integration.+__Suite(All|AuthEmailFalse)" $*
+	if [ ! -z $RABBITMQ ]; then 
+		run_test_suite "--auth-email=true --eventstreams=cores --eventstream-cores-url=$RABBITMQ" ".+Integration.+__Suite(All|AuthEmailTrue)" $*
+		run_test_suite "--auth-email=false --eventstreams=cores --eventstream-cores-url=$RABBITMQ" ".+Integration.+__Suite(All|AuthEmailFalse)" $*
 
+	fi
+
+	# storages
 	run_test_suite "--auth-email=true" ".+Integration.+__Suite(All|AuthEmailTrue)" $*
 	run_test_suite "--auth-email=false" ".+Integration.+__Suite(All|AuthEmailFalse)" $*
+
+	if [ ! -z $REDIS ]; then
+		run_test_suite "--auth-email=true --storage=redis --redis-address=$REDIS" ".+Integration.+__Suite(All|AuthEmailTrue)" $*
+		run_test_suite "--auth-email=false --storage=redis --redis-address=$REDIS" ".+Integration.+__Suite(All|AuthEmailFalse)" $*
+	fi
+
+	if [ ! -z $ETCD ]; then
+		run_test_suite "--auth-email=true --storage=etcd --storage-etcd-peers=$ETCD" ".+Integration.+__Suite(All|AuthEmailTrue)" $*
+		run_test_suite "--auth-email=false --storage=etcd --storage-etcd-peers=$ETCD" ".+Integration.+__Suite(All|AuthEmailFalse)" $*
+	fi
 
 }
 

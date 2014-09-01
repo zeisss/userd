@@ -37,6 +37,12 @@ func TestIntegrationReadUser__SuiteAll(t *testing.T) {
 	if user.ProfileName != userResult.UserName {
 		t.Fatalf("Failed to read profile name from service: %s", user.ProfileName)
 	}
+	if user.Email != userResult.Email {
+		t.Fatalf("Email differs")
+	}
+	if user.LoginName != userResult.LoginName {
+		t.Fatalf("LoginName differs")
+	}
 }
 
 func TestIntegrationAuth__SuiteAll(t *testing.T) {
@@ -82,6 +88,23 @@ func TestIntegrationChangeLoginCredentials__SuiteAll(t *testing.T) {
 	}
 	if userID != userResult.userID {
 		t.Fatalf("Logged into the wrong user!")
+	}
+}
+
+func TestIntegrationChangeEmail__SuiteAll(t *testing.T) {
+	userResult := Builder.givenNewVerifiedUser(t)
+	newEmail := Builder.Fake.Email()
+
+	if err := ApiChangeEmail(userResult.userID, newEmail); err != nil {
+		t.Fatalf("Failed to change email: %v", err)
+	}
+
+	user, err := ApiGetUser(userResult.userID)
+	if err != nil {
+		t.Fatalf("Failed to read user: %v", err)
+	}
+	if user.Email != newEmail {
+		t.Fatalf("Expected new email '%s', but got '%s'", newEmail, user.Email)
 	}
 }
 

@@ -191,6 +191,29 @@ func (call ChangeProfileNameCall) ResponseNoContent(resp *http.Response) (interf
 
 // ------------------------
 
+func ApiChangeEmail(userID, newEmail string) error {
+	_, err := Execute(Endpoint("change_email"), ChangeEmailCall{ID: userID, Email: newEmail})
+	return errgo.Mask(err)
+}
+
+type ChangeEmailCall struct {
+	ID    string
+	Email string
+}
+
+func (call ChangeEmailCall) PostForm() url.Values {
+	p := url.Values{}
+	p.Set("id", call.ID)
+	p.Set("email", call.Email)
+	return p
+}
+
+func (call ChangeEmailCall) ResponseNoContent(resp *http.Response) (interface{}, error) {
+	return nil, nil
+}
+
+// ------------------------
+
 func ApiChangeLoginCredentials(userID, name, password string) error {
 	_, err := Execute(Endpoint("change_login_credentials"), ChangeLoginCredentialsCall{ID: userID, Login: name, Password: password})
 	return errgo.Mask(err)
