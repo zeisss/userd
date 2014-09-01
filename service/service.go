@@ -11,16 +11,31 @@ type Dependencies struct {
 	IdFactory   IdFactory
 	Hasher      PasswordHasher
 	UserStorage UserStorage
+
+	// EventStream.Publish() is called for every succesfull event in the UserService. Should also forward to EventCollector.
 	EventStream EventStream
 }
 
 type Config struct {
 	AuthEmailMustBeVerified bool
+	MaxItems                int
+}
+
+func NewUserService(config Config, deps Dependencies) *UserService {
+	return &UserService{
+		Dependencies: deps,
+		Config:       config,
+
+		EventCollector: NewEventCollector(config.MaxItems),
+	}
 }
 
 type UserService struct {
 	Dependencies
 	Config
+
+	// EventCollector is used by any consumer of the UserService which needs access to the previous events.
+	EventCollector *EventCollector
 }
 
 func (us *UserService) CreateUser(profileName, email, loginName, loginPassword string) (string, error) {
@@ -49,10 +64,10 @@ func (us *UserService) CreateUser(profileName, email, loginName, loginPassword s
 		return "", Mask(err)
 	}
 
-	us.logEvent("user.created", struct {
-		UserID      string `json:"user_id"`
-		ProfileName string `json:"profile_name"`
-	}{newUserID, profileName})
+	us.logEvent("user.created", map[string]interface{}{
+		"user_id":      newUserID,
+		"profile_name": profileName,
+	})
 
 	return newUserID, nil
 }
@@ -74,9 +89,9 @@ func (us *UserService) ChangeLoginCredentials(userID, newLogin, newPassword stri
 		user.LoginPasswordHash = us.Hasher.Hash(newPassword)
 		return nil
 	}, func(user *user.User) {
-		us.logEvent("user.change_login_credentials", struct {
-			UserID string `json:"user_id"`
-		}{userID})
+		us.logEvent("user.change_login_credentials", map[string]interface{}{
+			"user_id": userID,
+		})
 	})
 }
 
@@ -90,10 +105,10 @@ func (us *UserService) ChangeProfileName(userID, profileName string) error {
 		user.ProfileName = profileName
 		return nil
 	}, func(user *user.User) {
-		us.logEvent("user.change_profile_name", struct {
-			UserID      string `json:"user_id"`
-			ProfileName string `json:"profile_name"`
-		}{userID, profileName})
+		us.logEvent("user.change_profile_name", map[string]interface{}{
+			"user_id":      userID,
+			"profile_name": profileName,
+		})
 	})
 }
 
@@ -107,10 +122,10 @@ func (us *UserService) ChangeEmail(userID, email string) error {
 		user.Email = email
 		return nil
 	}, func(user *user.User) {
-		us.logEvent("user.change_email", struct {
-			UserID string `json:"user_id"`
-			Email  string `json:"email"`
-		}{userID, email})
+		us.logEvent("user.change_email", map[string]interface{}{
+			"user_id": userID,
+			"email":   email,
+		})
 	})
 }
 
@@ -166,10 +181,10 @@ func (us *UserService) SetEmailVerified(userID string) error {
 		user.EmailVerified = true
 		return nil
 	}, func(user *user.User) {
-		us.logEvent("user.email_verified", struct {
-			UserID string `json:"user_id"`
-			Email  string `json:"email"`
-		}{userID, user.Email})
+		us.logEvent("user.email_verified", map[string]interface{}{
+			"user_id": user.ID,
+			"email":   user.Email,
+		})
 	})
 }
 
@@ -186,10 +201,10 @@ func (us *UserService) CheckAndSetEmailVerified(userID, email string) error {
 		user.EmailVerified = true
 		return nil
 	}, func(user *user.User) {
-		us.logEvent("user.email_verified", struct {
-			UserID string `json:"user_id"`
-			Email  string `json:"email"`
-		}{userID, email})
+		us.logEvent("user.email_verified", map[string]interface{}{
+			"user_id": user.ID,
+			"email":   user.Email,
+		})
 	})
 }
 
@@ -228,5 +243,6 @@ func (us *UserService) logEvent(tag string, entry interface{}) {
 		// Our own data structs should always be jsonizable - if not we have a bug
 		panic(err)
 	}
-	us.EventStream.Publish(tag, data)
+	go us.EventStream.Publish(tag, data)
+	go us.EventCollector.publish(tag, data)
 }

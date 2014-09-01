@@ -33,6 +33,8 @@ func NewUserAPIHandler(userService *service.UserService) http.Handler {
 
 	mux.Methods("POST").Path("/v1/user/authenticate").Handler(&AuthenticationHandler{base})
 
+	mux.Methods("GET").Path("/v1/feed").Handler(&FeedWriter{base})
+
 	return mux
 }
 
@@ -45,7 +47,7 @@ type BaseHandler struct {
 func (base *BaseHandler) writeProcessingError(resp http.ResponseWriter, err error) {
 	httputil.WriteJSONErrorPage(resp, http.StatusInternalServerError, "An Internal Error occured. Please try again later.")
 
-	log.Printf("Internal error: %v\n", err)
+	log.Printf("Internal error: %#v\n", err)
 }
 
 func (base *BaseHandler) UserID(req *http.Request) (string, bool) {
@@ -258,4 +260,13 @@ func (h *VerifyEmailHandler) Email(req *http.Request) (string, bool) {
 		return "", false
 	}
 	return email[0], true
+}
+
+// ----------------------------------------------
+
+type FeedWriter struct{ BaseHandler }
+
+func (h *FeedWriter) ServeHTTP(resp http.ResponseWriter, req *http.Request) {
+	resp.Header().Set("Content-Type", "application/json")
+	h.UserService.EventCollector.WriteJSONStreamOnce(resp)
 }

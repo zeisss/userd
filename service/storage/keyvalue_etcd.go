@@ -1,80 +1,134 @@
 package storage
 
 import (
-	"../user"
-
-	"encoding/json"
-	"fmt"
+	"log"
 	"net/http"
 
 	"github.com/coreos/go-etcd/etcd"
 	"github.com/juju/errgo"
 )
 
-func NewEtcdStorage(peer, prefix string, ttl uint64) *etcdStorage {
-	client := etcd.NewClient([]string{peer})
-
-	client.SyncCluster()
-
-	return &etcdStorage{client, prefix, ttl}
+// KeyFormat (ETCD):
+//  /moinz.de/userd/user/<userid> = JSON()
+//  /moinz.de/userd/email/<email> = userid()
+//  /moinz.de/userd/login_name/<login_name> = userid()
+//
+// =>
+//  <prefix>/<index>/<key> = <value>
+func etcdKey(prefix, index, key string) string {
+	return prefix + "/" + index + "/" + key
 }
 
-type etcdStorage struct {
+func NewEtcdStorage(peers []string, prefix string, ttl uint64, syncCluster, logCURL bool, logger *log.Logger) *keyValueStorage {
+	client := etcd.NewClient(peers)
+
+	if logger != nil {
+		etcd.SetLogger(logger)
+	}
+
+	if logCURL {
+		go func() {
+			for {
+				curl := client.RecvCURL()
+
+				log.Println(curl)
+			}
+		}()
+		client.OpenCURL()
+	}
+
+	if syncCluster {
+		client.SyncCluster()
+	}
+	return newKeyValueStorage(&EtcdStorageDriver{client, prefix, ttl})
+}
+
+type EtcdStorageDriver struct {
 	client *etcd.Client
 	prefix string
 	ttl    uint64
 }
 
-func (s *etcdStorage) Get(userID string) (user.User, error) {
-	var result user.User
+func (d *EtcdStorageDriver) Path(index, name string) string {
+	return etcdKey(d.prefix, index, name)
+}
 
-	rawResp, err := s.client.RawGet(s.Path(userID), false, false)
+// Index is called initially to create a helper for accessing an index
+func (d *EtcdStorageDriver) Index(name string) keyValueIndex {
+	return &EtcdIndex{d, name}
+}
+
+// Set writes the json with data
+func (d *EtcdStorageDriver) Set(userID, json string) error {
+	key := d.Path("user", userID)
+	_, err := d.client.Set(key, json, d.ttl)
+	return errgo.Mask(err)
+}
+
+func (d *EtcdStorageDriver) create(key, value string) error {
+	_, err := d.client.Create(key, string(value), d.ttl)
+	return errgo.Mask(err)
+}
+
+// Lookup returns the json previously written with Set().
+func (d *EtcdStorageDriver) Lookup(userID string) (string, bool, error) {
+	json, ok, err := d.lookupIndex("user", userID)
 	if err != nil {
-		return result, errgo.Mask(err)
+		return "", false, errgo.Mask(err)
 	}
+	return json, ok, nil
+}
 
+func (d *EtcdStorageDriver) lookupIndex(index, key string) (string, bool, error) {
+	path := d.Path(index, key)
+
+	rawResp, err := d.client.RawGet(path, false, false)
+	if err != nil {
+		return "", false, errgo.Mask(err)
+	}
 	if rawResp.StatusCode == http.StatusNotFound {
-		return result, UserNotFound
+		return "", false, nil
 	}
 
 	resp, err := rawResp.Unmarshal()
 	if err != nil {
-		return result, errgo.Mask(err)
-	}
-	if resp.Action != "get" {
-		return result, fmt.Errorf("Unexpected response from etcd: action=%s", resp.Action)
+		return "", false, errgo.Mask(err)
 	}
 
-	s.Unmarshal(resp.Node.Value, &result)
-
-	return result, nil
+	return resp.Node.Value, true, nil
 }
 
-func (s *etcdStorage) Save(user user.User) error {
-	_, err := s.client.Set(s.Path(user.ID), s.Marshal(&user), s.ttl)
-	return errgo.Mask(err)
-}
-
-func (s *etcdStorage) Path(userID string) string {
-	return fmt.Sprintf("/%s/user/%s", s.prefix, userID)
-}
-
-func (s *etcdStorage) Marshal(user *user.User) string {
-	data, err := json.Marshal(user)
+func (d *EtcdStorageDriver) removeIndex(index, key string) error {
+	path := d.Path(index, key)
+	_, err := d.client.Delete(path, false)
 	if err != nil {
-		panic(err)
+		return errgo.Mask(err)
 	}
-	return string(data)
+	return nil
 }
 
-func (s *etcdStorage) Unmarshal(value string, user *user.User) {
-	if err := json.Unmarshal([]byte(value), user); err != nil {
-		panic(err)
-	}
+// EtcdIndex implements KeyValueIndex on Etcd.
+type EtcdIndex struct {
+	Storage *EtcdStorageDriver
+	Name    string
 }
 
-func (s *etcdStorage) FindByLoginName(loginName string) (user.User, error) {
-	result := user.User{}
+func (s *EtcdIndex) Put(key, userID string) error {
+	path := s.Storage.Path(s.Name, key)
+	return errgo.Mask(s.Storage.create(path, userID))
+}
 
-	return result, nil
+func (s *EtcdIndex) Remove(key string) error {
+	if err := s.Storage.removeIndex(s.Name, key); err != nil {
+		return errgo.Mask(err)
+	}
+	return nil
+}
+
+func (s *EtcdIndex) Lookup(key string) (string, bool, error) {
+	json, ok, err := s.Storage.lookupIndex(s.Name, key)
+	if err != nil {
+		return "", false, errgo.Mask(err)
+	}
+	return json, ok, nil
 }
