@@ -58,9 +58,7 @@ func (us *UserService) CreateUser(profileName, email, loginName, loginPassword s
 		LoginPasswordHash: passwordHash,
 	}
 
-	err := us.UserStorage.Save(theUser)
-
-	if err != nil {
+	if err := us.UserStorage.Save(theUser); err != nil {
 		return "", Mask(err)
 	}
 
@@ -134,15 +132,30 @@ func (us *UserService) ChangeEmail(userID, email string) error {
 //
 // Error Helpers
 //
-func (us *UserService) Authenticate(loginName, loginPassword string) (string, error) {
-	if loginName == "" || loginPassword == "" {
+func (us *UserService) Authenticate(userOrMail, loginPassword string) (string, error) {
+	if userOrMail == "" || loginPassword == "" {
 		return "", InvalidArguments
 	}
-	log.Printf("call Authenticate('%s', ...)\n", loginName)
+	log.Printf("call Authenticate('%s', ...)\n", userOrMail)
 
-	theUser, err := us.UserStorage.FindByLoginName(loginName)
+	theUser, err := us.UserStorage.FindByLoginName(userOrMail)
 	if err != nil {
-		return "", Mask(err)
+		if IsNotFoundError(err) {
+			theUser, err = us.UserStorage.FindByEmail(userOrMail)
+			if err != nil {
+				return "", Mask(err)
+			}
+
+			us.logEvent("user.authenticated.withemail", map[string]interface{}{
+				"user_id": theUser.ID,
+			})
+		} else {
+			return "", Mask(err)
+		}
+	} else {
+		us.logEvent("user.authenticated.withloginname", map[string]interface{}{
+			"user_id": theUser.ID,
+		})
 	}
 
 	if us.AuthEmailMustBeVerified {
@@ -164,7 +177,7 @@ func (us *UserService) Authenticate(loginName, loginPassword string) (string, er
 		us.UserStorage.Save(theUser)
 	}
 
-	us.logEvent("user.authenticated", map[string]string{
+	us.logEvent("user.authenticated", map[string]interface{}{
 		"user_id": theUser.ID,
 	})
 

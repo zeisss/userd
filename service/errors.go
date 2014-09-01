@@ -37,7 +37,11 @@ func IsInvalidCredentials(err error) bool {
 	return errgo.Cause(err) == InvalidCredentials
 }
 
+func IsInvalidArguments(err error) bool {
+	return errgo.Cause(err) == InvalidArguments
+}
+
 func IsServiceError(err error) bool {
 	err = errgo.Cause(err)
-	return err == InvalidArguments || IsInvalidCredentials(err) || err == InvalidVerificationEmail
+	return IsInvalidArguments(err) || IsInvalidCredentials(err) || err == InvalidVerificationEmail
 }

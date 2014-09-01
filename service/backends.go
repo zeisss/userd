@@ -20,6 +20,7 @@ type UserStorage interface {
 	Get(userId string) (user.User, error)
 
 	FindByLoginName(loginName string) (user.User, error)
+	FindByEmail(email string) (user.User, error)
 }
 
 // EventLog abstracts any eventlog for store the business events of the UserService.

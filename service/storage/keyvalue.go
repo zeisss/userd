@@ -106,6 +106,17 @@ func (s *keyValueStorage) FindByLoginName(loginName string) (user.User, error) {
 	return s.noLockLookup(userID)
 }
 
+func (s *keyValueStorage) FindByEmail(email string) (user.User, error) {
+	userID, ok, err := s.Emails.Lookup(email)
+	if err != nil {
+		return user.User{}, errgo.Mask(err)
+	}
+	if !ok {
+		return user.User{}, UserNotFound
+	}
+	return s.noLockLookup(userID)
+}
+
 // -------------------------------------------------
 
 func (s *keyValueStorage) checkTakenByOtherUser(index keyValueIndex, key, userID string) (bool, error) {

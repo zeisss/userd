@@ -20,6 +20,24 @@ func respondErrorInvalidCredentials(ctx *middlewarePkg.Context) error {
 	return ctx.Response.Json(apiSchemaPkg.StatusResourceInvalidCredentials(), http.StatusInternalServerError)
 }
 
+func (v2 *V2) CreateUser(res http.ResponseWriter, req *http.Request, ctx *middlewarePkg.Context) error {
+	var payload map[string]string
+	if err := json.NewDecoder(req.Body).Decode(&payload); err != nil {
+		return errgo.Newf("Invalid request body. Expecting json. Aborting...")
+	}
+	loginName := payload["username"]
+	email := payload["email"]
+	loginPassword := payload["password"]
+	profileName := loginName
+
+	userID, err := v2.UserService.CreateUser(profileName, email, loginName, loginPassword)
+	if err != nil {
+		return errgo.Mask(err)
+	}
+
+	return ctx.Response.Json(apiSchemaPkg.StatusData(userID), http.StatusOK)
+}
+
 func (v2 *V2) LoginUser(res http.ResponseWriter, req *http.Request, ctx *middlewarePkg.Context) error {
 	// Get user or mail.
 	userOrMail := ctx.MuxVars["userOrMail"]
@@ -31,19 +49,12 @@ func (v2 *V2) LoginUser(res http.ResponseWriter, req *http.Request, ctx *middlew
 	}
 	password := payload["password"]
 
-	// Check if credentials empty.
-	if userOrMail == "" {
-		return respondErrorInvalidCredentials(ctx)
-	}
-
-	if password == "" {
-		return respondErrorInvalidCredentials(ctx)
-	}
-
 	// Authenticate.
 	userID, err := v2.UserService.Authenticate(userOrMail, password)
 	if servicePkg.IsNotFoundError(err) {
 		return ctx.Response.Json(apiSchemaPkg.StatusResourceNotFound(), http.StatusInternalServerError)
+	} else if servicePkg.IsInvalidArguments(err) {
+		return respondErrorInvalidCredentials(ctx)
 	} else if servicePkg.IsInvalidCredentials(err) {
 		return respondErrorInvalidCredentials(ctx)
 	} else if err != nil {
