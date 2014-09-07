@@ -33,6 +33,9 @@ func NewUserAPIHandler(userService *service.UserService) http.Handler {
 
 	mux.Methods("POST").Path("/v1/user/authenticate").Handler(&AuthenticationHandler{base})
 
+	mux.Methods("POST").Path("/v1/user/new_reset_login_credentials_token").Handler(&NewResetLoginCredentialsHandler{base})
+	mux.Methods("POST").Path("/v1/user/reset_login_credentials").Handler(&ResetCredentialsTokenHandler{base})
+
 	mux.Methods("GET").Path("/v1/feed").Handler(&FeedWriter{base})
 
 	return mux
@@ -260,6 +263,38 @@ func (h *VerifyEmailHandler) Email(req *http.Request) (string, bool) {
 		return "", false
 	}
 	return email[0], true
+}
+
+// ----------------------------------------------
+type NewResetLoginCredentialsHandler struct{ BaseHandler }
+
+func (r *NewResetLoginCredentialsHandler) ServeHTTP(resp http.ResponseWriter, req *http.Request) {
+	email := req.FormValue("email")
+
+	token, err := r.UserService.NewResetLoginCredentialsToken(email)
+	if err != nil {
+		r.handleProcessingError(resp, req, err)
+	} else {
+		httputil.WriteJSONResponse(resp, http.StatusOK, map[string]interface{}{
+			"token": token,
+		})
+	}
+}
+
+// ----------------------------------------------
+type ResetCredentialsTokenHandler struct{ BaseHandler }
+
+func (r *ResetCredentialsTokenHandler) ServeHTTP(resp http.ResponseWriter, req *http.Request) {
+	token := req.FormValue("token")
+	login_name := req.FormValue("login_name")
+	login_password := req.FormValue("login_password")
+
+	token, err := r.UserService.ResetCredentialsWithToken(token, login_name, login_password)
+	if err != nil {
+		r.handleProcessingError(resp, req, err)
+	} else {
+		httputil.WriteNoContent(resp)
+	}
 }
 
 // ----------------------------------------------

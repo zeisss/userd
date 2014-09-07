@@ -21,3 +21,6 @@ func (seq *sequenceFactory) NewUserID() string {
 		return fmt.Sprintf(seq.Format, seq.Sequence)
 	}
 }
+func (seq *sequenceFactory) NewResetPasswordToken() string {
+	return seq.NewUserID()
+}

@@ -18,6 +18,7 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"time"
 )
 
 // ------------------------------------------------------------------------------
@@ -58,7 +59,8 @@ func UserStorage() service.UserStorage {
 	case "memory":
 		return storage.NewLocalStorage()
 	default:
-		panic("Unknown --storage value: " + *backendStorage)
+		log.Fatalf("Unknown --storage value: %s", *backendStorage)
+		return nil
 	}
 }
 
@@ -77,7 +79,8 @@ func IdFactory() service.IdFactory {
 	case "seq":
 		return idfactory.NewSequenceFactory(*factorySeqFormat)
 	default:
-		panic("Unknown -idfactory value: " + *switchFactory)
+		log.Fatalf("Unknown -idfactory value: %s", *switchFactory)
+		return nil
 	}
 
 }
@@ -127,7 +130,7 @@ func EventStreams() *eventstream.Broadcaster {
 		case "none":
 			newStream = eventstream.NewNoneEventLog()
 		default:
-			panic("Unknown -eventstream value: " + name)
+			log.Fatalf("Unknown -eventstream value: %s", name)
 		}
 
 		broadcaster.AddStream(newStream)
@@ -141,14 +144,17 @@ func EventStreams() *eventstream.Broadcaster {
 var (
 	authEmail              = flag.Bool("auth-email", true, "Must the email adress be verified for an authentication to succeed.")
 	eventCollectorMaxItems = flag.Int("feed-max-items", 1000, "Maximum items to keep in feed.")
+
+	resetPasswordExpireTime = flag.Uint("expire-reset-password-token", 2*60, "How long can a resetPasswordToken be used (minutes)")
 )
 
 func main() {
+	log.SetFlags(log.LstdFlags | log.Lshortfile)
 	starter := httpcli.NewStarterFromFlagSet(flag.CommandLine)
 	flag.Parse()
 
 	dependencies := service.Dependencies{IdFactory(), PasswordHasher(), UserStorage(), EventStreams()}
-	config := service.Config{*authEmail, *eventCollectorMaxItems}
+	config := service.Config{*authEmail, *eventCollectorMaxItems, time.Duration(*resetPasswordExpireTime) * time.Minute}
 
 	userService := service.NewUserService(config, dependencies)
 

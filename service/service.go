@@ -5,6 +5,7 @@ import (
 
 	"encoding/json"
 	"log"
+	"time"
 )
 
 type Dependencies struct {
@@ -19,9 +20,32 @@ type Dependencies struct {
 type Config struct {
 	AuthEmailMustBeVerified bool
 	MaxItems                int
+
+	// How long can a ResetPasswordToken be used?
+	ResetPasswordExpireTime time.Duration
+}
+
+func (c Config) ValidateValues() error {
+	if c.MaxItems <= 0 {
+		return newInvalidConfig("MaxItems", c.MaxItems)
+	}
+	if c.ResetPasswordExpireTime <= 0 {
+		return newInvalidConfig("ResetPasswordExpireTime", c.ResetPasswordExpireTime)
+	}
+	return nil
+}
+
+// Validate checks all values and panics if any one is invalid.
+func (c Config) Validate() {
+	if err := c.ValidateValues(); err != nil {
+		panic(err)
+	}
 }
 
 func NewUserService(config Config, deps Dependencies) *UserService {
+	config.Validate()
+
+	deps.UserStorage = &UserStorageWrapper{deps.UserStorage}
 	return &UserService{
 		Dependencies: deps,
 		Config:       config,
@@ -67,6 +91,7 @@ func (us *UserService) CreateUser(profileName, email, loginName, loginPassword s
 	us.logEvent("user.created", map[string]interface{}{
 		"user_id":      newUserID,
 		"profile_name": profileName,
+		"email":        email,
 	})
 
 	return newUserID, nil
@@ -206,6 +231,78 @@ func (us *UserService) CheckAndSetEmailVerified(userID, email string) error {
 			"email":   user.Email,
 		})
 	})
+}
+
+// NewResetLoginCredentialsToken creates a new reset password token, associates it with the user and returns it. The
+// consumer should forward this token to the user's email (or via another communication medium which is known
+// to reach the real user) to verify that the initiator is the real user.
+//
+// Event: user.new_reset_password_token(user_id, email, token)
+//
+// Returs the new token to reset the password with or an error if no user could be found.
+func (us *UserService) NewResetLoginCredentialsToken(email string) (string, error) {
+	if email == "" {
+		// Only one may be empty
+		return "", InvalidArguments
+	}
+	log.Printf("call NewResetLoginCredentialsToken('%s')", email)
+
+	u, err := us.UserStorage.FindByEmail(email)
+	if err != nil {
+		return "", Mask(err)
+	}
+
+	now := time.Now()
+	u.ResetPasswordToken = us.IdFactory.NewResetPasswordToken()
+	u.ResetPasswordTokenIssued = &now
+
+	if err := us.UserStorage.Save(u); err != nil {
+		return "", Mask(err)
+	}
+
+	us.logEvent("user.new_reset_login_credentials_token", map[string]interface{}{
+		"user_id":   u.ID,
+		"email":     u.Email,
+		"token":     u.ResetPasswordToken,
+		"timestamp": u.ResetPasswordTokenIssued,
+	})
+	return u.ResetPasswordToken, nil
+}
+
+// ResetCredentialsWithToken checks for users with the given token and resets their login credentials to given values.
+//
+// Event: user.
+func (us *UserService) ResetCredentialsWithToken(resetPasswordToken, new_login_name, new_login_password string) (string, error) {
+	if resetPasswordToken == "" || new_login_name == "" || new_login_password == "" {
+		return "", Mask(InvalidArguments)
+	}
+
+	user, err := us.UserStorage.FindByResetPasswordToken(resetPasswordToken)
+	if err != nil {
+		if IsNotFoundError(err) {
+			return "", Mask(InvalidArguments)
+		}
+		return "", Mask(err)
+	}
+
+	if time.Now().After(user.ResetPasswordTokenIssued.Add(us.ResetPasswordExpireTime)) {
+		return "", Mask(ResetPasswordTokenExpired)
+	}
+
+	user.LoginName = new_login_name
+	user.LoginPasswordHash = us.Hasher.Hash(new_login_password)
+	user.ResetPasswordToken = ""
+	user.ResetPasswordTokenIssued = nil
+
+	if err := us.UserStorage.Save(user); err != nil {
+		return "", Mask(err)
+	}
+
+	us.logEvent("user.login_credentials_resetted", map[string]interface{}{
+		"user_id": user.ID,
+	})
+
+	return user.ID, nil
 }
 
 // readModifyWrite reads the user with the given userID, applies modifier to it, saves the result

@@ -238,3 +238,57 @@ func (call ChangeLoginCredentialsCall) ResponseNoContent(resp *http.Response) (i
 }
 
 // ------------------------
+
+func ApiNewResetPasswordToken(email string) (string, error) {
+	token, err := Execute(Endpoint("new_reset_login_credentials_token"), NewResetPasswordToken{email})
+	if err != nil {
+		return "", errgo.Mask(err)
+	}
+	return token.(string), nil
+}
+
+type NewResetPasswordToken struct {
+	Email string
+}
+
+func (call NewResetPasswordToken) PostForm() url.Values {
+	p := url.Values{}
+	p.Set("email", call.Email)
+	return p
+}
+
+func (call NewResetPasswordToken) ResponseOK(resp *http.Response) (interface{}, error) {
+	target := map[string]interface{}{}
+
+	if err := json.NewDecoder(resp.Body).Decode(&target); err != nil {
+		return "", errgo.Mask(err)
+	}
+	return target["token"], nil
+}
+
+// ------------------------
+
+func ApiResetLoginCredentials(token, login_name, login_password string) error {
+	_, err := Execute(Endpoint("reset_login_credentials"), ResetLoginCredentials{token, login_name, login_password})
+	return errgo.Mask(err)
+}
+
+type ResetLoginCredentials struct {
+	Token         string
+	LoginName     string
+	LoginPassword string
+}
+
+func (call ResetLoginCredentials) PostForm() url.Values {
+	p := url.Values{}
+	p.Set("login_name", call.LoginName)
+	p.Set("token", call.Token)
+	p.Set("login_password", call.LoginPassword)
+	return p
+}
+
+func (call ResetLoginCredentials) ResponseNoContent(resp *http.Response) (interface{}, error) {
+	return nil, nil
+}
+
+// ------------------------

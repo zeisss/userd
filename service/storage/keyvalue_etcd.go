@@ -8,6 +8,8 @@ import (
 	"github.com/juju/errgo"
 )
 
+const userDataName = "user"
+
 // KeyFormat (ETCD):
 //  /moinz.de/userd/user/<userid> = JSON()
 //  /moinz.de/userd/email/<email> = userid()
@@ -60,7 +62,7 @@ func (d *EtcdStorageDriver) Index(name string) keyValueIndex {
 
 // Set writes the json with data
 func (d *EtcdStorageDriver) Set(userID, json string) error {
-	key := d.Path("user", userID)
+	key := d.Path(userDataName, userID)
 	_, err := d.client.Set(key, json, d.ttl)
 	return errgo.Mask(err)
 }
@@ -72,7 +74,7 @@ func (d *EtcdStorageDriver) create(key, value string) error {
 
 // Lookup returns the json previously written with Set().
 func (d *EtcdStorageDriver) Lookup(userID string) (string, bool, error) {
-	json, ok, err := d.lookupIndex("user", userID)
+	json, ok, err := d.lookupIndex(userDataName, userID)
 	if err != nil {
 		return "", false, errgo.Mask(err)
 	}

@@ -82,6 +82,7 @@ func Execute(url string, call Call) (interface{}, error) {
 		method = "GET"
 		response, httpErr = http.Get(url)
 	}
+	defer response.Body.Close()
 
 	// If the call itself failed, call the RequestErrorHandler or just return directly
 	if httpErr != nil {
@@ -117,13 +118,13 @@ func Execute(url string, call Call) (interface{}, error) {
 			return c.ResponseBadRequest(response)
 		}
 	default:
+		if c, ok := call.(FallbackHandler); ok {
+			return c.HandleFallback(response)
+		}
+
 	}
 
-	if c, ok := call.(FallbackHandler); ok {
-		return c.HandleFallback(response)
-	}
 	return nil, fmt.Errorf("No handler found for status code %d for URL %s %s", response.StatusCode, method, url)
-
 }
 
 // ------------------
