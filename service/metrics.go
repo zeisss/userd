@@ -2,48 +2,61 @@ package service
 
 import (
 	metrics "github.com/rcrowley/go-metrics"
+
+	"log"
 )
 
-func NewSuccessFailureMetric(prefix string) SuccessFailureMetric {
-	success := metrics.GetOrRegisterCounter(prefix+".success", metrics.DefaultRegistry)
-	failure := metrics.GetOrRegisterCounter(prefix+".failure", metrics.DefaultRegistry)
-	timer := metrics.GetOrRegisterTimer(prefix+".timer", metrics.DefaultRegistry)
-
-	return SuccessFailureMetric{success, failure, timer}
+func NewMetricExecutor() *MetricExecutor {
+	return &MetricExecutor{
+		operations: make(map[string]operation),
+	}
 }
 
-type SuccessFailureMetric struct {
-	success metrics.Counter
-	failure metrics.Counter
-	timer   metrics.Timer
+type operation struct {
+	Name    string
+	Success metrics.Counter
+	Failure metrics.Counter
+	Timer   metrics.Timer
 }
 
-func (c *SuccessFailureMetric) Success() {
-	c.success.Inc(1)
+// TODO: Better design: start a collector in a go routine and let each operate execute independently
+// and then send the result (success/failture + time) to the collector go routine.
+type MetricExecutor struct {
+	operations map[string]operation
 }
 
-func (c *SuccessFailureMetric) Failure() {
-	c.failure.Inc(1)
-}
+// execute executes the given op and returns it return value.
+// If logging is enabled, the operation result and/or input will be logged.
+// The call counter for the operation will be incremented and the execution time added to the metrics.
+// If an error occurs, the error will also reported to the error reporter.
+//
+// No new errors should be returned. Anything the `op` returns, this method returns.
+// The `output` is not modified.
+func (executor *MetricExecutor) execute(opName string, input interface{}, output interface{}, op func() error) error {
+	log.Printf("call %s(%v)", opName, input)
 
-func (c *SuccessFailureMetric) CountError(err error) error {
+	m, found := executor.operations[opName]
+	if !found {
+		m = operation{
+			Name:    opName,
+			Success: metrics.GetOrRegisterCounter(opName+".success", metrics.DefaultRegistry),
+			Failure: metrics.GetOrRegisterCounter(opName+".failure", metrics.DefaultRegistry),
+			Timer:   metrics.GetOrRegisterTimer(opName+".timer", metrics.DefaultRegistry),
+		}
+		executor.operations[opName] = m
+	}
+
+	var err error
+	m.Timer.Time(func() {
+		err = op()
+	})
 	if err != nil {
-		c.Failure()
+		// TODO: Report to error handler
+		m.Failure.Inc(1)
 	} else {
-		c.Success()
+
+		// TODO: Write to EventStream?
+		m.Success.Inc(1)
 	}
 	return err
-}
-
-func (c *SuccessFailureMetric) Run(f func() error) error {
-	var err error
-	c.timer.Time(func() {
-		err = f()
-		c.CountError(err)
-	})
-	return err
-}
-
-func (c *SuccessFailureMetric) Time(f func()) {
-	c.timer.Time(f)
 }

@@ -82,7 +82,6 @@ func Execute(url string, call Call) (interface{}, error) {
 		method = "GET"
 		response, httpErr = http.Get(url)
 	}
-	defer response.Body.Close()
 
 	// If the call itself failed, call the RequestErrorHandler or just return directly
 	if httpErr != nil {
