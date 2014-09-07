@@ -9,3 +9,7 @@ type UUIDFactory struct{}
 func (factory *UUIDFactory) NewUserID() string {
 	return uuid.New()
 }
+
+func (factory *UUIDFactory) NewResetPasswordToken() string {
+	return uuid.New()
+}

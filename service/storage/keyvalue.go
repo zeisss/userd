@@ -8,6 +8,8 @@ import (
 	"encoding/json"
 )
 
+const debugKeyValue = true
+
 type keyValueIndex interface {
 	Put(key, userID string) error
 	Remove(key string) error
@@ -26,8 +28,9 @@ type keyValueStorageDriver interface {
 }
 
 type keyValueStorage struct {
-	LoginNames keyValueIndex
-	Emails     keyValueIndex
+	LoginNames         keyValueIndex
+	Emails             keyValueIndex
+	ResetPasswordToken keyValueIndex
 
 	Driver keyValueStorageDriver
 }
@@ -35,17 +38,27 @@ type keyValueStorage struct {
 func newKeyValueStorage(driver keyValueStorageDriver) *keyValueStorage {
 	loginNames := driver.Index("login_name")
 	emails := driver.Index("emails")
+	resedPasswordToken := driver.Index("reset_password_token")
 
 	return &keyValueStorage{
-		Driver:     driver,
-		LoginNames: loginNames,
-		Emails:     emails,
+		Driver:             driver,
+		LoginNames:         loginNames,
+		Emails:             emails,
+		ResetPasswordToken: resedPasswordToken,
 	}
 }
 
 func (s *keyValueStorage) Save(user user.User) error {
-	if user.ID == "" || user.Email == "" || user.LoginName == "" {
-		return InvalidUserObject
+	if user.ID == "" {
+		return errgo.Mask(InvalidUserObject)
+	}
+	if user.Email == "" {
+		return errgo.Mask(InvalidUserObject)
+
+	}
+
+	if user.LoginName == "" {
+		return errgo.Mask(InvalidUserObject)
 	}
 
 	// Unique Index Validation
@@ -61,22 +74,37 @@ func (s *keyValueStorage) Save(user user.User) error {
 		return LoginNameAlreadyTaken
 	}
 
+	if user.ResetPasswordToken != "" {
+		if taken, err := s.checkTakenByOtherUser(s.ResetPasswordToken, user.ResetPasswordToken, user.ID); err != nil {
+			return errgo.Mask(err)
+		} else if taken {
+			return LoginNameAlreadyTaken
+		}
+	}
+
 	// Write
 	oldUser, err := s.noLockLookup(user.ID)
 	if err != nil && err != UserNotFound {
 		return errgo.Mask(err)
 	}
 
-	if oldUser.Email != user.Email && oldUser.Email != "" {
+	if oldUser.Email != "" {
 		s.Emails.Remove(oldUser.Email)
 	}
 
-	if oldUser.LoginName != user.LoginName && oldUser.Email != "" {
+	if oldUser.LoginName != "" {
 		s.LoginNames.Remove(oldUser.LoginName)
+	}
+
+	if oldUser.ResetPasswordToken != "" {
+		s.ResetPasswordToken.Remove(oldUser.ResetPasswordToken)
 	}
 
 	s.Emails.Put(user.Email, user.ID)
 	s.LoginNames.Put(user.LoginName, user.ID)
+	if user.ResetPasswordToken != "" {
+		s.ResetPasswordToken.Put(user.ResetPasswordToken, user.ID)
+	}
 
 	data, err := json.Marshal(user)
 	if err != nil {
@@ -97,6 +125,26 @@ func (s *keyValueStorage) Get(userID string) (user.User, error) {
 
 func (s *keyValueStorage) FindByLoginName(loginName string) (user.User, error) {
 	userID, ok, err := s.LoginNames.Lookup(loginName)
+	if err != nil {
+		return user.User{}, errgo.Mask(err)
+	}
+	if !ok {
+		return user.User{}, UserNotFound
+	}
+	return s.noLockLookup(userID)
+}
+func (s *keyValueStorage) FindByEmail(email string) (user.User, error) {
+	userID, ok, err := s.Emails.Lookup(email)
+	if err != nil {
+		return user.User{}, errgo.Mask(err)
+	}
+	if !ok {
+		return user.User{}, UserNotFound
+	}
+	return s.noLockLookup(userID)
+}
+func (s *keyValueStorage) FindByResetPasswordToken(token string) (user.User, error) {
+	userID, ok, err := s.ResetPasswordToken.Lookup(token)
 	if err != nil {
 		return user.User{}, errgo.Mask(err)
 	}
