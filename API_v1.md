@@ -75,13 +75,11 @@ Event: user.authenticated (user_id)
 + Response 400
 + Response 404
 
-### POST /v1/user/new_reset_login_credentials_token?email={email}&login_name={login_name}
+### POST /v1/user/new_reset_login_credentials_token?email={email}
 
 Creates a new reset password token, associates it with the user and returns it. The consumer should forward this token to the user's email (or via another communication medium which is known to reach the real user) to verify that the initiator is the real user.
 
-One of the arguments must be given, the second if optional. If both are given, a user must match both values.
-
-Event: user.new_reset_login_credentials_token(user_id, token)
+Event: user.new_reset_login_credentials_token(user_id, email, token)
 
 + Response 200
 

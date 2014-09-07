@@ -239,8 +239,8 @@ func (call ChangeLoginCredentialsCall) ResponseNoContent(resp *http.Response) (i
 
 // ------------------------
 
-func ApiNewResetPasswordToken(email, login_name string) (string, error) {
-	token, err := Execute(Endpoint("new_reset_login_credentials_token"), NewResetPasswordToken{email, login_name})
+func ApiNewResetPasswordToken(email string) (string, error) {
+	token, err := Execute(Endpoint("new_reset_login_credentials_token"), NewResetPasswordToken{email})
 	if err != nil {
 		return "", errgo.Mask(err)
 	}
@@ -248,13 +248,11 @@ func ApiNewResetPasswordToken(email, login_name string) (string, error) {
 }
 
 type NewResetPasswordToken struct {
-	Email     string
-	LoginName string
+	Email string
 }
 
 func (call NewResetPasswordToken) PostForm() url.Values {
 	p := url.Values{}
-	p.Set("login_name", call.LoginName)
 	p.Set("email", call.Email)
 	return p
 }

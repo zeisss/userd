@@ -124,12 +124,7 @@ func Execute(url string, call Call) (interface{}, error) {
 
 	}
 
-	data := make([]byte, 2048)
-
-	if _, err := io.ReadFull(response.Body, data); err != nil {
-		panic(err)
-	}
-	return nil, fmt.Errorf("No handler found for status code %d for URL %s %s: %s", response.StatusCode, method, url, string(data))
+	return nil, fmt.Errorf("No handler found for status code %d for URL %s %s", response.StatusCode, method, url)
 }
 
 // ------------------

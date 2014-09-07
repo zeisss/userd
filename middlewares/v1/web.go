@@ -270,9 +270,8 @@ type NewResetLoginCredentialsHandler struct{ BaseHandler }
 
 func (r *NewResetLoginCredentialsHandler) ServeHTTP(resp http.ResponseWriter, req *http.Request) {
 	email := req.FormValue("email")
-	login_name := req.FormValue("login_name")
 
-	token, err := r.UserService.NewResetLoginCredentialsToken(email, login_name)
+	token, err := r.UserService.NewResetLoginCredentialsToken(email)
 	if err != nil {
 		r.handleProcessingError(resp, req, err)
 	} else {

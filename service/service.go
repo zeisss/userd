@@ -237,68 +237,36 @@ func (us *UserService) CheckAndSetEmailVerified(userID, email string) error {
 // consumer should forward this token to the user's email (or via another communication medium which is known
 // to reach the real user) to verify that the initiator is the real user.
 //
-// One of the arguments must be given, the second if optional. If both are given, a user must match both values.
-//
-// Event: user.new_reset_password_token(user_id, reset_login_credentials_token)
+// Event: user.new_reset_password_token(user_id, email, token)
 //
 // Returs the new token to reset the password with or an error if no user could be found.
-func (us *UserService) NewResetLoginCredentialsToken(email, login_name string) (string, error) {
-	if email == "" && login_name == "" {
+func (us *UserService) NewResetLoginCredentialsToken(email string) (string, error) {
+	if email == "" {
 		// Only one may be empty
 		return "", InvalidArguments
 	}
-	log.Printf("call NewResetLoginCredentialsToken('%s', '%s')", email, login_name)
+	log.Printf("call NewResetLoginCredentialsToken('%s')", email)
 
-	var user user.User
-	var err error
-
-	if user.ID == "" && login_name != "" {
-		log.Println("FindByLoginName")
-		user, err = us.UserStorage.FindByLoginName(login_name)
-		if err != nil {
-			if !IsNotFoundError(err) {
-				return "", Mask(err)
-			}
-		}
-	}
-
-	if user.ID == "" && email != "" {
-		log.Println("FindByEmail", email)
-		user, err = us.UserStorage.FindByEmail(email)
-		if err != nil {
-			if !IsNotFoundError(err) {
-				return "", Mask(err)
-			}
-		}
-	}
-
-	log.Printf("user %#v\nerr %#v\n", user, err)
-
-	// Last, check if we have a user
-	if IsNotFoundError(err) {
+	u, err := us.UserStorage.FindByEmail(email)
+	if err != nil {
 		return "", Mask(err)
 	}
-	if user.ID == "" {
-		log.Printf("user %v\n", user)
-		log.Printf("err: %v\n", err)
-		panic("Invalid state reached for " + email + "," + login_name + ".")
-	}
 
-	resetPasswordToken := us.IdFactory.NewResetPasswordToken()
-	resetPasswordIssued := time.Now()
+	now := time.Now()
+	u.ResetPasswordToken = us.IdFactory.NewResetPasswordToken()
+	u.ResetPasswordTokenIssued = &now
 
-	user.ResetPasswordToken = resetPasswordToken
-	user.ResetPasswordTokenIssued = &resetPasswordIssued
-
-	if err := us.UserStorage.Save(user); err != nil {
+	if err := us.UserStorage.Save(u); err != nil {
 		return "", Mask(err)
 	}
 
 	us.logEvent("user.new_reset_login_credentials_token", map[string]interface{}{
-		"user_id": user.ID,
-		"token":   resetPasswordToken,
+		"user_id":   u.ID,
+		"email":     u.Email,
+		"token":     u.ResetPasswordToken,
+		"timestamp": u.ResetPasswordTokenIssued,
 	})
-	return resetPasswordToken, nil
+	return u.ResetPasswordToken, nil
 }
 
 // ResetCredentialsWithToken checks for users with the given token and resets their login credentials to given values.
