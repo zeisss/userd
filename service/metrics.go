@@ -39,9 +39,9 @@ func (executor *MetricExecutor) execute(opName string, input interface{}, output
 	if !found {
 		m = operation{
 			Name:    opName,
-			Success: metrics.GetOrRegisterCounter(opName+".success", metrics.DefaultRegistry),
-			Failure: metrics.GetOrRegisterCounter(opName+".failure", metrics.DefaultRegistry),
-			Timer:   metrics.GetOrRegisterTimer(opName+".timer", metrics.DefaultRegistry),
+			Success: metrics.GetOrRegisterCounter("service."+opName+".success", metrics.DefaultRegistry),
+			Failure: metrics.GetOrRegisterCounter("service."+opName+".failure", metrics.DefaultRegistry),
+			Timer:   metrics.GetOrRegisterTimer("service."+opName+".timer", metrics.DefaultRegistry),
 		}
 		executor.operations[opName] = m
 	}
