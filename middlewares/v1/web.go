@@ -34,6 +34,10 @@ func NewUserAPIHandler(userService *service.UserService) http.Handler {
 
 	mux.Methods("POST").Path("/v1/user/authenticate").Handler(&AuthenticationHandler{base})
 
+	mux.Methods("POST").Path("/v1/user/new_reset_login_credentials_token").Handler(&NewResetLoginCredentialsHandler{base})
+	mux.Methods("POST").Path("/v1/user/reset_login_credentials").Handler(&ResetCredentialsTokenHandler{base})
+
+	mux.Methods("GET").Path("/v1/feed").Handler(&FeedWriter{base})
 	mux.Methods("GET").Path("/v1/metrics").Handler(&MetricsWriter{metrics.DefaultRegistry})
 
 	return mux
@@ -48,7 +52,7 @@ type BaseHandler struct {
 func (base *BaseHandler) writeProcessingError(resp http.ResponseWriter, err error) {
 	httputil.WriteJSONErrorPage(resp, http.StatusInternalServerError, "An Internal Error occured. Please try again later.")
 
-	log.Printf("Internal error: %v\n", err)
+	log.Printf("Internal error: %#v\n", err)
 }
 
 func (base *BaseHandler) UserID(req *http.Request) (string, bool) {
@@ -262,6 +266,49 @@ func (h *VerifyEmailHandler) Email(req *http.Request) (string, bool) {
 		return "", false
 	}
 	return email[0], true
+}
+
+// ----------------------------------------------
+
+type NewResetLoginCredentialsHandler struct{ BaseHandler }
+
+func (r *NewResetLoginCredentialsHandler) ServeHTTP(resp http.ResponseWriter, req *http.Request) {
+	email := req.FormValue("email")
+
+	token, err := r.UserService.NewResetLoginCredentialsToken(email)
+	if err != nil {
+		r.handleProcessingError(resp, req, err)
+	} else {
+		httputil.WriteJSONResponse(resp, http.StatusOK, map[string]interface{}{
+			"token": token,
+		})
+	}
+}
+
+// ----------------------------------------------
+
+type ResetCredentialsTokenHandler struct{ BaseHandler }
+
+func (r *ResetCredentialsTokenHandler) ServeHTTP(resp http.ResponseWriter, req *http.Request) {
+	token := req.FormValue("token")
+	login_name := req.FormValue("login_name")
+	login_password := req.FormValue("login_password")
+
+	token, err := r.UserService.ResetCredentialsWithToken(token, login_name, login_password)
+	if err != nil {
+		r.handleProcessingError(resp, req, err)
+	} else {
+		httputil.WriteNoContent(resp)
+	}
+}
+
+// ----------------------------------------------
+
+type FeedWriter struct{ BaseHandler }
+
+func (h *FeedWriter) ServeHTTP(resp http.ResponseWriter, req *http.Request) {
+	resp.Header().Set("Content-Type", "application/json")
+	h.UserService.EventCollector.WriteJSONStreamOnce(resp)
 }
 
 // ----------------------------------------------

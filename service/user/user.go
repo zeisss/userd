@@ -1,5 +1,9 @@
 package user
 
+import (
+	"time"
+)
+
 type User struct {
 	ID string
 
@@ -10,4 +14,7 @@ type User struct {
 
 	Email         string
 	EmailVerified bool
+
+	ResetPasswordToken       string
+	ResetPasswordTokenIssued *time.Time
 }
