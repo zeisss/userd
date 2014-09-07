@@ -33,7 +33,7 @@ type MetricExecutor struct {
 // No new errors should be returned. Anything the `op` returns, this method returns.
 // The `output` is not modified.
 func (executor *MetricExecutor) execute(opName string, input interface{}, output interface{}, op func() error) error {
-	log.Printf("call %s(%v)", opName, input)
+	log.Printf("call %s in  (%v)", opName, input)
 
 	m, found := executor.operations[opName]
 	if !found {
@@ -50,6 +50,7 @@ func (executor *MetricExecutor) execute(opName string, input interface{}, output
 	m.Timer.Time(func() {
 		err = op()
 	})
+	log.Printf("call %s out (%v, %v)", opName, output, err)
 	if err != nil {
 		// TODO: Report to error handler
 		m.Failure.Inc(1)
