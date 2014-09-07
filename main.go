@@ -139,7 +139,6 @@ func EventStreams() *eventstream.Broadcaster {
 }
 
 // ------------------------------------------------------------------------------
-// ------------------------------------------------------------------------------
 
 var (
 	authEmail              = flag.Bool("auth-email", true, "Must the email adress be verified for an authentication to succeed.")

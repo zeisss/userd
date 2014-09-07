@@ -313,14 +313,10 @@ func (us *UserService) readModifyWrite(userID string, modifier func(user *user.U
 		return Mask(err)
 	}
 
-	// log.Printf("READ %v\n", user)
-
 	err = modifier(&user)
 	if err != nil {
 		return Mask(err)
 	}
-
-	// log.Printf("WRITE %v\n", user)
 
 	err = us.UserStorage.Save(user)
 	if err != nil {
@@ -333,7 +329,7 @@ func (us *UserService) readModifyWrite(userID string, modifier func(user *user.U
 	return nil
 }
 
-// logEvent serializes the entry with `encoding/json` and writes it to the us.EventLog
+// logEvent serializes the entry with `encoding/json` and writes it to the us.EventStream
 func (us *UserService) logEvent(tag string, entry interface{}) {
 	data, err := json.Marshal(entry)
 	if err != nil {
