@@ -10,6 +10,8 @@ import (
 
 	"./service/storage"
 
+	"./microservice"
+
 	httpcli "./http/cli"
 
 	flag "github.com/ogier/pflag"
@@ -186,6 +188,14 @@ var (
 	resetPasswordExpireTime = flag.Uint("expire-reset-password-token", 2*60, "How long can a resetPasswordToken be used (minutes)")
 )
 
+func ErrorReporter() microservice.ErrorReporter {
+	return microservice.NewStderrErrorReporter()
+}
+
+func Executor() *microservice.Executor {
+	return microservice.NewExecutor(ErrorReporter())
+}
+
 func main() {
 	log.SetFlags(log.LstdFlags | log.Lshortfile)
 	starter := httpcli.NewStarterFromFlagSet(flag.CommandLine)
@@ -194,7 +204,7 @@ func main() {
 
 	MetricsRegistry() // Just calling, because it uses the DefaultRegistry
 
-	dependencies := service.Dependencies{IdFactory(), PasswordHasher(), UserStorage(), EventStreams()}
+	dependencies := service.Dependencies{IdFactory(), PasswordHasher(), UserStorage(), Executor(), EventStreams()}
 	config := service.Config{*authEmail, *eventCollectorMaxItems, time.Duration(*resetPasswordExpireTime) * time.Minute}
 
 	userService := service.NewUserService(config, dependencies)

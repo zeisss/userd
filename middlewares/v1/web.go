@@ -116,7 +116,6 @@ func (h *GetUserHandler) ServeHTTP(resp http.ResponseWriter, req *http.Request) 
 	}
 
 	var response service.GetUserResponse
-
 	if err := h.UserService.GetUser(service.GetUserRequest{userId}, &response); err != nil {
 		h.handleProcessingError(resp, req, MaskError(err))
 	} else {

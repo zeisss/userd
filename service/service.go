@@ -3,6 +3,8 @@ package service
 import (
 	"./user"
 
+	"../microservice"
+
 	"encoding/json"
 	"time"
 )
@@ -11,6 +13,8 @@ type Dependencies struct {
 	IdFactory   IdFactory
 	Hasher      PasswordHasher
 	UserStorage UserStorage
+
+	Executor *microservice.Executor
 
 	// EventStream.Publish() is called for every succesfull event in the UserService. Should also forward to EventCollector.
 	EventStream EventStream
@@ -50,15 +54,12 @@ func NewUserService(config Config, deps Dependencies) *UserService {
 		Config:       config,
 
 		EventCollector: NewEventCollector(config.MaxItems),
-
-		MetricExecutor: NewMetricExecutor(),
 	}
 }
 
 type UserService struct {
 	Dependencies
 	Config
-	*MetricExecutor
 
 	// EventCollector is used by any consumer of the UserService which needs access to the previous events.
 	EventCollector *EventCollector
@@ -76,7 +77,7 @@ type CreateUserResponse struct {
 }
 
 func (us *UserService) CreateUser(req CreateUserRequest, resp *CreateUserResponse) error {
-	return us.execute("CreateUser", req, resp, func() error {
+	return us.Executor.Execute("CreateUser", req, resp, func() error {
 		if req.ProfileName == "" || req.Email == "" || req.LoginName == "" || req.LoginPassword == "" {
 			return Mask(InvalidArguments)
 		}
@@ -108,7 +109,6 @@ func (us *UserService) CreateUser(req CreateUserRequest, resp *CreateUserRespons
 		resp.UserID = newUserID
 		return nil
 	})
-
 }
 
 type GetUserRequest struct {
@@ -119,7 +119,7 @@ type GetUserResponse struct {
 }
 
 func (us *UserService) GetUser(req GetUserRequest, response *GetUserResponse) error {
-	return us.execute("GetUser", req, response, func() error {
+	return us.Executor.Execute("GetUser", req, response, func() error {
 		u, err := us.UserStorage.Get(req.UserID)
 		response.User = u
 		return Mask(err)
@@ -133,7 +133,7 @@ type ChangeLoginCredentialsRequest struct {
 }
 
 func (us *UserService) ChangeLoginCredentials(req ChangeLoginCredentialsRequest) error {
-	return us.execute("ChangeLoginCredentials", req, nil, func() error {
+	return us.Executor.Execute("ChangeLoginCredentials", req, nil, func() error {
 		if req.UserID == "" || req.LoginName == "" || req.LoginPassword == "" {
 			return Mask(InvalidArguments)
 		}
@@ -157,7 +157,7 @@ type ChangeProfileNameRequest struct {
 }
 
 func (us *UserService) ChangeProfileName(request ChangeProfileNameRequest) error {
-	return us.execute("ChangeProfileName", request, nil, func() error {
+	return us.Executor.Execute("ChangeProfileName", request, nil, func() error {
 		if request.UserID == "" || request.ProfileName == "" {
 			return Mask(InvalidArguments)
 		}
@@ -181,7 +181,7 @@ type ChangeEmailRequest struct {
 }
 
 func (us *UserService) ChangeEmail(request ChangeEmailRequest) error {
-	return us.execute("ChangeEmail", request, nil, func() error {
+	return us.Executor.Execute("ChangeEmail", request, nil, func() error {
 		if request.UserID == "" || request.Email == "" {
 			return Mask(InvalidArguments)
 		}
@@ -213,7 +213,7 @@ type AuthenticateResponse struct {
 // Error Helpers
 //
 func (us *UserService) Authenticate(request AuthenticateRequest, response *AuthenticateResponse) error {
-	return us.execute("Authenticate", request, response, func() error {
+	return us.Executor.Execute("Authenticate", request, response, func() error {
 		if request.LoginName == "" || request.LoginPassword == "" {
 			return Mask(InvalidArguments)
 		}
@@ -258,7 +258,7 @@ type SetEmailVerifiedRequest struct {
 }
 
 func (us *UserService) SetEmailVerified(request SetEmailVerifiedRequest) error {
-	return us.execute("SetEmailVerified", request, nil, func() error {
+	return us.Executor.Execute("SetEmailVerified", request, nil, func() error {
 		if request.UserID == "" {
 			return InvalidArguments
 		}
@@ -282,7 +282,7 @@ type CheckAndSetEmailVerifiedRequest struct {
 }
 
 func (us *UserService) CheckAndSetEmailVerified(req CheckAndSetEmailVerifiedRequest) error {
-	return us.execute("CheckAndSetEmailVerifiedRequest", req, nil, func() error {
+	return us.Executor.Execute("CheckAndSetEmailVerifiedRequest", req, nil, func() error {
 		if req.UserID == "" || req.Email == "" {
 			return InvalidArguments
 		}
@@ -318,7 +318,7 @@ type NewResetCredentialsTokenResponse struct {
 //
 // Returs the new token to reset the password with or an error if no user could be found.
 func (us *UserService) NewResetLoginCredentialsToken(request NewResetCredentialsTokenRequest, response *NewResetCredentialsTokenResponse) error {
-	return us.execute("NewResetLoginCredentialsToken", request, response, func() error {
+	return us.Executor.Execute("NewResetLoginCredentialsToken", request, response, func() error {
 		if request.Email == "" {
 			// Only one may be empty
 			return Mask(InvalidArguments)
@@ -363,7 +363,7 @@ type ResetCredentialsResponse struct {
 //
 // Event: user.
 func (us *UserService) ResetCredentialsWithToken(req ResetCredentialsRequest, resp *ResetCredentialsResponse) error {
-	return us.execute("ResetCredentialsWithToken", req, resp, func() error {
+	return us.Executor.Execute("ResetCredentialsWithToken", req, resp, func() error {
 		if req.Token == "" || req.LoginName == "" || req.LoginPassword == "" {
 			return Mask(InvalidArguments)
 		}

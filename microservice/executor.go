@@ -1,4 +1,4 @@
-package service
+package microservice
 
 import (
 	metrics "github.com/rcrowley/go-metrics"
@@ -7,14 +7,10 @@ import (
 	"time"
 )
 
-type errorReporter interface {
-	Notify(opName string, input interface{}, err error)
-}
-
-func NewMetricExecutor() *MetricExecutor {
-	return &MetricExecutor{
+func NewExecutor(reporter ErrorReporter) *Executor {
+	return &Executor{
 		LogCalls:      true,
-		ErrorReporter: nil,
+		ErrorReporter: reporter,
 		Registry:      metrics.DefaultRegistry,
 
 		operations: make(map[string]operation),
@@ -30,9 +26,9 @@ type operation struct {
 
 // TODO: Better design: start a collector in a go routine and let each operate execute independently
 // and then send the result (success/failture + time) to the collector go routine.
-type MetricExecutor struct {
+type Executor struct {
 	LogCalls      bool
-	ErrorReporter errorReporter
+	ErrorReporter ErrorReporter
 	Registry      metrics.Registry
 
 	operations map[string]operation
@@ -45,7 +41,7 @@ type MetricExecutor struct {
 //
 // No new errors should be returned. Anything the `op` returns, this method returns.
 // The `output` is not modified.
-func (executor *MetricExecutor) execute(opName string, input interface{}, output interface{}, op func() error) error {
+func (executor *Executor) Execute(opName string, input interface{}, output interface{}, op func() error) error {
 	if executor.LogCalls {
 		log.Printf("call %s in  (%v)", opName, input)
 	}
@@ -55,24 +51,24 @@ func (executor *MetricExecutor) execute(opName string, input interface{}, output
 	err := op()
 	taken := time.Since(now)
 
-	// Post processing
-	executor.collectMetrics(opName, taken, err)
-
 	if executor.LogCalls {
 		log.Printf("call %s out (%v, %v)", opName, output, err)
 	}
 
-	if err != nil {
-		if executor.ErrorReporter != nil {
-			executor.ErrorReporter.Notify(opName, input, err)
-		}
-	} else {
-		// TODO: Write to EventStream?
-	}
+	// Post processing
+	executor.collectMetrics(opName, taken, err)
+	executor.collectError(opName, input, err)
+
 	return err
 }
 
-func (executor *MetricExecutor) collectMetrics(opName string, dur time.Duration, err error) {
+func (executor *Executor) collectError(opName string, input interface{}, err error) {
+	if executor.ErrorReporter != nil && err != nil {
+		executor.ErrorReporter.Notify(opName, input, err)
+	}
+}
+
+func (executor *Executor) collectMetrics(opName string, dur time.Duration, err error) {
 	m, found := executor.operations[opName]
 	if !found {
 		m = operation{
@@ -89,6 +85,5 @@ func (executor *MetricExecutor) collectMetrics(opName string, dur time.Duration,
 	} else {
 		m.Success.Inc(1)
 	}
-
 	m.Timer.Update(dur)
 }
