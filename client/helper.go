@@ -123,7 +123,6 @@ func Execute(url string, call Call) (interface{}, error) {
 	if c, ok := call.(FallbackHandler); ok {
 		return c.HandleFallback(response)
 	}
-
 	return nil, fmt.Errorf("No handler found for status code %d for URL %s %s", response.StatusCode, method, url)
 }
 
