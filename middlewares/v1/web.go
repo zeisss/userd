@@ -313,7 +313,7 @@ type FeedWriter struct{ BaseHandler }
 
 func (h *FeedWriter) ServeHTTP(resp http.ResponseWriter, req *http.Request) {
 	resp.Header().Set("Content-Type", "application/json")
-	h.UserService.EventCollector.WriteJSONStreamOnce(resp)
+	h.UserService.EventCollector.WriteJSONOnce(resp)
 }
 
 // ----------------------------------------------
