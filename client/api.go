@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"errors"
 	"io/ioutil"
-	"log"
 	"net/http"
 	"net/url"
 )
@@ -21,68 +20,6 @@ func SetEndpoint(url string) {
 
 func Endpoint(action string) string {
 	return endpoint + action
-}
-
-func ApiCreateUser(profileName, email, loginName, loginPassword string) (string, error) {
-	params := url.Values{}
-	params.Add("profile_name", profileName)
-	params.Add("email", email)
-	params.Add("login_name", loginName)
-	params.Add("login_password", loginPassword)
-
-	return postFormAndExpectAndReturnBodyString("create", params, http.StatusCreated)
-}
-
-type ApiUser struct {
-	ProfileName   string `json:"profile_name"`
-	LoginName     string `json:"login_name"`
-	Email         string `json:"email"`
-	EmailVerified bool   `json:"email_verified"`
-}
-
-func ApiGetUser(userID string) (ApiUser, error) {
-	var result ApiUser
-
-	params := url.Values{}
-	params.Add("id", userID)
-
-	resp, err := getAndExpect("get", params, http.StatusOK)
-	if err != nil {
-		return result, errgo.Mask(err)
-	}
-
-	err = json.NewDecoder(resp.Body).Decode(&result)
-	return result, err
-}
-
-func getAndExpect(action string, params url.Values, expectedStatusCode int) (*http.Response, error) {
-	resp, err := http.Get(Endpoint(action) + "?" + params.Encode())
-	if err != nil {
-		return resp, errgo.Mask(err)
-	}
-	if resp.StatusCode != expectedStatusCode {
-		log.Printf("URL 'GET %s' returned code %d, expected %d", Endpoint(action), resp.StatusCode, expectedStatusCode)
-		return resp, UnexpectedStatusCode
-	}
-	return resp, nil
-}
-
-func postFormAndExpectAndReturnBodyString(action string, params url.Values, expectedStatusCode int) (string, error) {
-	resp, err := http.PostForm(Endpoint(action), params)
-	if err != nil {
-		panic(err)
-	}
-
-	if resp.StatusCode != expectedStatusCode {
-		log.Printf("URL 'POST %s' returned code %d, expected %d", Endpoint(action), resp.StatusCode, expectedStatusCode)
-		return "", UnexpectedStatusCode
-	}
-
-	data, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		return "", errgo.Mask(err)
-	}
-	return string(data), nil
 }
 
 // --------------------
@@ -116,6 +53,72 @@ func (call BodyReader) ResponseBadRequest(resp *http.Response) (interface{}, err
 		return "", errgo.Mask(err)
 	}
 	return "", errors.New(string(data))
+}
+
+// --------------------
+
+func ApiCreateUser(profileName, email, loginName, loginPassword string) (string, error) {
+	userID, err := Execute(Endpoint("create"), CreateUserCall{profileName, email, loginName, loginPassword})
+	if err != nil {
+		return "", errgo.Mask(err)
+	}
+	return userID.(string), nil
+}
+
+type CreateUserCall struct {
+	ProfileName   string
+	Email         string
+	LoginName     string
+	LoginPassword string
+}
+
+func (call CreateUserCall) PostForm() url.Values {
+	params := url.Values{}
+	params.Add("profile_name", call.ProfileName)
+	params.Add("email", call.Email)
+	params.Add("login_name", call.LoginName)
+	params.Add("login_password", call.LoginPassword)
+	return params
+}
+
+func (call CreateUserCall) ResponseCreated(resp *http.Response) (interface{}, error) {
+	data, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return "", errgo.Mask(err)
+	}
+	return string(data), nil
+}
+
+// --------------------
+
+type ApiUser struct {
+	ProfileName   string `json:"profile_name"`
+	LoginName     string `json:"login_name"`
+	Email         string `json:"email"`
+	EmailVerified bool   `json:"email_verified"`
+}
+
+func ApiGetUser(userID string) (ApiUser, error) {
+	var result ApiUser
+
+	call := GetUserCall{JsonCall{&result}, userID}
+
+	_, err := Execute(Endpoint("get"), call)
+	if err != nil {
+		return result, errgo.Mask(err)
+	}
+	return result, nil
+}
+
+type GetUserCall struct {
+	JsonCall
+	UserID string
+}
+
+func (c GetUserCall) QueryParams() url.Values {
+	params := url.Values{}
+	params.Add("id", c.UserID)
+	return params
 }
 
 // ------------------------
