@@ -1,5 +1,10 @@
 userd
 
+
+# mac 
+.DS_Store
+
+# Golang
 src
 bin
 pkg

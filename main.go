@@ -10,11 +10,15 @@ import (
 
 	"./service/storage"
 
+	"./microservice"
+
 	httpcli "./http/cli"
 
 	flag "github.com/ogier/pflag"
+	metrics "github.com/rcrowley/go-metrics"
 
 	"log"
+	"net"
 	"net/http"
 	"os"
 	"strings"
@@ -141,18 +145,66 @@ func EventStreams() *eventstream.Broadcaster {
 // ------------------------------------------------------------------------------
 
 var (
+	metricsCaptureDebugGCStats       = flag.Bool("metrics-capture-debug-stats", false, "Capture GC Debug stats in the metrics.")
+	metricsCaptureDebugGCDuration    = flag.Int("metrics-capture-debug-duration", 60, "Duration between catching debug stats.")
+	metricsCaptureRuntimeMemStats    = flag.Bool("metrics-capture-runtime-stats", true, "Capture Runtime Mem Stats.")
+	metricsCaptureRuntimeMemDuration = flag.Int("metrics-capture-runtime-duration", 60, "Duration between catching runtime stats.")
+
+	metricsGraphiteEnable = flag.Bool("metrics-graphite", false, "Write metrics to graphite")
+	metricsGraphiteHost   = flag.String("metrics-graphite-host", "localhost:2003", "The host:port to connect to.")
+	metricsGraphiteFlush  = flag.Int("metrics-graphite-flush", 10, "Seconds between flushes to graphite")
+	metricsGraphitePrefix = flag.String("metrics-graphite-prefix", "userd", "A prefix for key sent to graphite")
+)
+
+func MetricsRegistry() metrics.Registry {
+	r := metrics.DefaultRegistry
+
+	if *metricsCaptureDebugGCStats {
+		metrics.RegisterDebugGCStats(r)
+		go metrics.CaptureDebugGCStats(r, time.Duration(*metricsCaptureDebugGCDuration)*time.Second)
+	}
+	if *metricsCaptureRuntimeMemStats {
+		metrics.RegisterRuntimeMemStats(r)
+		go metrics.CaptureRuntimeMemStats(r, time.Duration(*metricsCaptureRuntimeMemDuration)*time.Second)
+	}
+
+	if *metricsGraphiteEnable {
+		addr, err := net.ResolveTCPAddr("tcp", *metricsGraphiteHost)
+		if err != nil {
+			panic(err)
+		}
+		go metrics.Graphite(r, time.Duration(*metricsGraphiteFlush)*time.Second, *metricsGraphitePrefix, addr)
+	}
+
+	return r
+}
+
+// ------------------------------------------------------------------------------
+
+var (
 	authEmail              = flag.Bool("auth-email", true, "Must the email adress be verified for an authentication to succeed.")
 	eventCollectorMaxItems = flag.Int("feed-max-items", 1000, "Maximum items to keep in feed.")
 
 	resetPasswordExpireTime = flag.Uint("expire-reset-password-token", 2*60, "How long can a resetPasswordToken be used (minutes)")
 )
 
+func ErrorReporter() microservice.ErrorReporter {
+	return microservice.NewStderrErrorReporter()
+}
+
+func Executor() *microservice.Executor {
+	return microservice.NewExecutor(ErrorReporter())
+}
+
 func main() {
 	log.SetFlags(log.LstdFlags | log.Lshortfile)
 	starter := httpcli.NewStarterFromFlagSet(flag.CommandLine)
+
 	flag.Parse()
 
-	dependencies := service.Dependencies{IdFactory(), PasswordHasher(), UserStorage(), EventStreams()}
+	MetricsRegistry() // Just calling, because it uses the DefaultRegistry
+
+	dependencies := service.Dependencies{IdFactory(), PasswordHasher(), UserStorage(), Executor(), EventStreams()}
 	config := service.Config{*authEmail, *eventCollectorMaxItems, time.Duration(*resetPasswordExpireTime) * time.Minute}
 
 	userService := service.NewUserService(config, dependencies)

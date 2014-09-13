@@ -3,8 +3,9 @@ package service
 import (
 	"./user"
 
+	"../microservice"
+
 	"encoding/json"
-	"log"
 	"time"
 )
 
@@ -12,6 +13,8 @@ type Dependencies struct {
 	IdFactory   IdFactory
 	Hasher      PasswordHasher
 	UserStorage UserStorage
+
+	Executor *microservice.Executor
 
 	// EventStream.Publish() is called for every succesfull event in the UserService. Should also forward to EventCollector.
 	EventStream EventStream
@@ -62,96 +65,146 @@ type UserService struct {
 	EventCollector *EventCollector
 }
 
-func (us *UserService) CreateUser(profileName, email, loginName, loginPassword string) (string, error) {
-	if profileName == "" || email == "" || loginName == "" || loginPassword == "" {
-		return "", InvalidArguments
-	}
-	log.Printf("call CreateUser('%s', '%s', ..)\n", profileName, email)
-
-	passwordHash := us.Hasher.Hash(loginPassword)
-	newUserID := us.IdFactory.NewUserID()
-
-	theUser := user.User{
-		ID:          newUserID,
-		ProfileName: profileName,
-
-		Email:         email,
-		EmailVerified: false,
-
-		LoginName:         loginName,
-		LoginPasswordHash: passwordHash,
-	}
-
-	err := us.UserStorage.Save(theUser)
-
-	if err != nil {
-		return "", Mask(err)
-	}
-
-	us.logEvent("user.created", map[string]interface{}{
-		"user_id":      newUserID,
-		"profile_name": profileName,
-		"email":        email,
-	})
-
-	return newUserID, nil
+type CreateUserRequest struct {
+	ProfileName   string
+	Email         string
+	LoginName     string
+	LoginPassword string
 }
 
-func (us *UserService) GetUser(id string) (user.User, error) {
-	log.Printf("call GetUser('%s')\n", id)
-	user, err := us.UserStorage.Get(id)
-	return user, Mask(err)
+type CreateUserResponse struct {
+	UserID string
 }
 
-func (us *UserService) ChangeLoginCredentials(userID, newLogin, newPassword string) error {
-	if userID == "" || newLogin == "" || newPassword == "" {
-		return InvalidArguments
-	}
-	log.Printf("call ChangeLoginCredentials('%s', ..)\n", userID)
+func (us *UserService) CreateUser(req CreateUserRequest, resp *CreateUserResponse) error {
+	return us.Executor.Execute("CreateUser", req, resp, func() error {
+		if req.ProfileName == "" || req.Email == "" || req.LoginName == "" || req.LoginPassword == "" {
+			return Mask(InvalidArguments)
+		}
 
-	return us.readModifyWrite(userID, func(user *user.User) error {
-		user.LoginName = newLogin
-		user.LoginPasswordHash = us.Hasher.Hash(newPassword)
+		passwordHash := us.Hasher.Hash(req.LoginPassword)
+		newUserID := us.IdFactory.NewUserID()
+
+		theUser := user.User{
+			ID:          newUserID,
+			ProfileName: req.ProfileName,
+
+			Email:         req.Email,
+			EmailVerified: false,
+
+			LoginName:         req.LoginName,
+			LoginPasswordHash: passwordHash,
+		}
+
+		if err := us.UserStorage.Save(theUser); err != nil {
+			return Mask(err)
+		}
+
+		us.logEvent("user.created", map[string]interface{}{
+			"user_id":      newUserID,
+			"profile_name": req.ProfileName,
+			"email":        req.Email,
+		})
+
+		resp.UserID = newUserID
 		return nil
-	}, func(user *user.User) {
-		us.logEvent("user.change_login_credentials", map[string]interface{}{
-			"user_id": userID,
+	})
+}
+
+type GetUserRequest struct {
+	UserID string
+}
+type GetUserResponse struct {
+	User user.User
+}
+
+func (us *UserService) GetUser(req GetUserRequest, response *GetUserResponse) error {
+	return us.Executor.Execute("GetUser", req, response, func() error {
+		u, err := us.UserStorage.Get(req.UserID)
+		response.User = u
+		return Mask(err)
+	})
+}
+
+type ChangeLoginCredentialsRequest struct {
+	UserID        string
+	LoginName     string
+	LoginPassword string
+}
+
+func (us *UserService) ChangeLoginCredentials(req ChangeLoginCredentialsRequest) error {
+	return us.Executor.Execute("ChangeLoginCredentials", req, nil, func() error {
+		if req.UserID == "" || req.LoginName == "" || req.LoginPassword == "" {
+			return Mask(InvalidArguments)
+		}
+
+		return us.readModifyWrite(req.UserID, func(user *user.User) error {
+			user.LoginName = req.LoginName
+			user.LoginPasswordHash = us.Hasher.Hash(req.LoginPassword)
+			return nil
+		}, func(user *user.User) {
+			us.logEvent("user.change_login_credentials", map[string]interface{}{
+				"user_id": req.UserID,
+			})
 		})
 	})
+
 }
 
-func (us *UserService) ChangeProfileName(userID, profileName string) error {
-	if userID == "" || profileName == "" {
-		return InvalidArguments
-	}
-	log.Printf("call ChangeProfileName('%s', '%s')\n", userID, profileName)
-
-	return us.readModifyWrite(userID, func(user *user.User) error {
-		user.ProfileName = profileName
-		return nil
-	}, func(user *user.User) {
-		us.logEvent("user.change_profile_name", map[string]interface{}{
-			"user_id":      userID,
-			"profile_name": profileName,
-		})
-	})
+type ChangeProfileNameRequest struct {
+	UserID      string
+	ProfileName string
 }
 
-func (us *UserService) ChangeEmail(userID, email string) error {
-	if userID == "" || email == "" {
-		return InvalidArguments
-	}
-	log.Printf("call ChangeEmail('%s', '%s')\n", userID, email)
+func (us *UserService) ChangeProfileName(request ChangeProfileNameRequest) error {
+	return us.Executor.Execute("ChangeProfileName", request, nil, func() error {
+		if request.UserID == "" || request.ProfileName == "" {
+			return Mask(InvalidArguments)
+		}
 
-	return us.readModifyWrite(userID, func(user *user.User) error {
-		user.Email = email
-		return nil
-	}, func(user *user.User) {
-		us.logEvent("user.change_email", map[string]interface{}{
-			"user_id": userID,
-			"email":   email,
+		return us.readModifyWrite(request.UserID, func(user *user.User) error {
+			user.ProfileName = request.ProfileName
+			return nil
+		}, func(user *user.User) {
+			us.logEvent("user.change_profile_name", map[string]interface{}{
+				"user_id":      request.UserID,
+				"profile_name": request.ProfileName,
+			})
 		})
 	})
+
+}
+
+type ChangeEmailRequest struct {
+	UserID string
+	Email  string
+}
+
+func (us *UserService) ChangeEmail(request ChangeEmailRequest) error {
+	return us.Executor.Execute("ChangeEmail", request, nil, func() error {
+		if request.UserID == "" || request.Email == "" {
+			return Mask(InvalidArguments)
+		}
+		return us.readModifyWrite(request.UserID, func(user *user.User) error {
+			user.Email = request.Email
+			return nil
+		}, func(user *user.User) {
+			us.logEvent("user.change_email", map[string]interface{}{
+				"user_id": request.UserID,
+				"email":   request.Email,
+			})
+		})
+	})
+
+}
+
+type AuthenticateRequest struct {
+	LoginName     string
+	LoginPassword string
+}
+
+type AuthenticateResponse struct {
+	UserID string
 }
 
 // Authenticate checks whether a user with the given login credentials exists.
@@ -159,78 +212,102 @@ func (us *UserService) ChangeEmail(userID, email string) error {
 //
 // Error Helpers
 //
-func (us *UserService) Authenticate(loginName, loginPassword string) (string, error) {
-	if loginName == "" || loginPassword == "" {
-		return "", InvalidArguments
-	}
-	log.Printf("call Authenticate('%s', ...)\n", loginName)
-
-	theUser, err := us.UserStorage.FindByLoginName(loginName)
-	if err != nil {
-		return "", Mask(err)
-	}
-
-	if us.AuthEmailMustBeVerified {
-		if !theUser.EmailVerified {
-			return "", UserEmailMustBeVerified
+func (us *UserService) Authenticate(request AuthenticateRequest, response *AuthenticateResponse) error {
+	return us.Executor.Execute("Authenticate", request, response, func() error {
+		if request.LoginName == "" || request.LoginPassword == "" {
+			return Mask(InvalidArguments)
 		}
-	}
 
-	passwordMatch := us.Hasher.Verify(loginPassword, theUser.LoginPasswordHash)
-	if !passwordMatch {
-		return "", InvalidCredentials
-	}
+		theUser, err := us.UserStorage.FindByLoginName(request.LoginName)
+		if err != nil {
+			return Mask(err)
+		}
 
-	needsRehash := us.Hasher.NeedsRehash(theUser.LoginPasswordHash)
-	if needsRehash {
-		theUser.LoginPasswordHash = us.Hasher.Hash(loginPassword)
+		if us.AuthEmailMustBeVerified {
+			if !theUser.EmailVerified {
+				return UserEmailMustBeVerified
+			}
+		}
 
-		// NOTE: we ignore any error here. Main intent of this function is to provide authentication
-		us.UserStorage.Save(theUser)
-	}
+		passwordMatch := us.Hasher.Verify(request.LoginPassword, theUser.LoginPasswordHash)
+		if !passwordMatch {
+			return InvalidCredentials
+		}
 
-	us.logEvent("user.authenticated", map[string]interface{}{
-		"user_id": theUser.ID,
+		needsRehash := us.Hasher.NeedsRehash(theUser.LoginPasswordHash)
+		if needsRehash {
+			theUser.LoginPasswordHash = us.Hasher.Hash(request.LoginPassword)
+
+			// NOTE: we ignore any error here. Main intent of this function is to provide authentication
+			us.UserStorage.Save(theUser)
+		}
+
+		us.logEvent("user.authenticated", map[string]interface{}{
+			"user_id": theUser.ID,
+		})
+
+		// Finish
+		response.UserID = theUser.ID
+		return nil
 	})
 
-	return theUser.ID, nil
 }
 
-func (us *UserService) SetEmailVerified(userID string) error {
-	if userID == "" {
-		return InvalidArguments
-	}
-	log.Printf("call SetEmailVerified('%s')\n", userID)
+type SetEmailVerifiedRequest struct {
+	UserID string
+}
 
-	return us.readModifyWrite(userID, func(user *user.User) error {
-		user.EmailVerified = true
-		return nil
-	}, func(user *user.User) {
-		us.logEvent("user.email_verified", map[string]interface{}{
-			"user_id": user.ID,
-			"email":   user.Email,
+func (us *UserService) SetEmailVerified(request SetEmailVerifiedRequest) error {
+	return us.Executor.Execute("SetEmailVerified", request, nil, func() error {
+		if request.UserID == "" {
+			return InvalidArguments
+		}
+
+		return us.readModifyWrite(request.UserID, func(user *user.User) error {
+			user.EmailVerified = true
+			return nil
+		}, func(user *user.User) {
+			us.logEvent("user.email_verified", map[string]interface{}{
+				"user_id": user.ID,
+				"email":   user.Email,
+			})
+		})
+	})
+
+}
+
+type CheckAndSetEmailVerifiedRequest struct {
+	UserID string
+	Email  string
+}
+
+func (us *UserService) CheckAndSetEmailVerified(req CheckAndSetEmailVerifiedRequest) error {
+	return us.Executor.Execute("CheckAndSetEmailVerifiedRequest", req, nil, func() error {
+		if req.UserID == "" || req.Email == "" {
+			return InvalidArguments
+		}
+
+		return us.readModifyWrite(req.UserID, func(user *user.User) error {
+			if user.Email != req.Email {
+				return InvalidVerificationEmail
+			}
+			user.EmailVerified = true
+			return nil
+		}, func(user *user.User) {
+			us.logEvent("user.email_verified", map[string]interface{}{
+				"user_id": user.ID,
+				"email":   user.Email,
+			})
 		})
 	})
 }
 
-func (us *UserService) CheckAndSetEmailVerified(userID, email string) error {
-	if userID == "" || email == "" {
-		return InvalidArguments
-	}
-	log.Printf("call CheckAndSetEmailVerified('%s', '%s')\n", userID, email)
+type NewResetCredentialsTokenRequest struct {
+	Email string
+}
 
-	return us.readModifyWrite(userID, func(user *user.User) error {
-		if user.Email != email {
-			return InvalidVerificationEmail
-		}
-		user.EmailVerified = true
-		return nil
-	}, func(user *user.User) {
-		us.logEvent("user.email_verified", map[string]interface{}{
-			"user_id": user.ID,
-			"email":   user.Email,
-		})
-	})
+type NewResetCredentialsTokenResponse struct {
+	Token string
 }
 
 // NewResetLoginCredentialsToken creates a new reset password token, associates it with the user and returns it. The
@@ -240,69 +317,85 @@ func (us *UserService) CheckAndSetEmailVerified(userID, email string) error {
 // Event: user.new_reset_password_token(user_id, email, token)
 //
 // Returs the new token to reset the password with or an error if no user could be found.
-func (us *UserService) NewResetLoginCredentialsToken(email string) (string, error) {
-	if email == "" {
-		// Only one may be empty
-		return "", InvalidArguments
-	}
-	log.Printf("call NewResetLoginCredentialsToken('%s')", email)
+func (us *UserService) NewResetLoginCredentialsToken(request NewResetCredentialsTokenRequest, response *NewResetCredentialsTokenResponse) error {
+	return us.Executor.Execute("NewResetLoginCredentialsToken", request, response, func() error {
+		if request.Email == "" {
+			// Only one may be empty
+			return Mask(InvalidArguments)
+		}
 
-	u, err := us.UserStorage.FindByEmail(email)
-	if err != nil {
-		return "", Mask(err)
-	}
+		u, err := us.UserStorage.FindByEmail(request.Email)
+		if err != nil {
+			return Mask(err)
+		}
 
-	now := time.Now()
-	u.ResetPasswordToken = us.IdFactory.NewResetPasswordToken()
-	u.ResetPasswordTokenIssued = &now
+		now := time.Now()
+		u.ResetPasswordToken = us.IdFactory.NewResetPasswordToken()
+		u.ResetPasswordTokenIssued = &now
 
-	if err := us.UserStorage.Save(u); err != nil {
-		return "", Mask(err)
-	}
+		if err := us.UserStorage.Save(u); err != nil {
+			return Mask(err)
+		}
 
-	us.logEvent("user.new_reset_login_credentials_token", map[string]interface{}{
-		"user_id":   u.ID,
-		"email":     u.Email,
-		"token":     u.ResetPasswordToken,
-		"timestamp": u.ResetPasswordTokenIssued,
+		us.logEvent("user.new_reset_login_credentials_token", map[string]interface{}{
+			"user_id":   u.ID,
+			"email":     u.Email,
+			"token":     u.ResetPasswordToken,
+			"timestamp": u.ResetPasswordTokenIssued,
+		})
+		response.Token = u.ResetPasswordToken
+		return nil
+
 	})
-	return u.ResetPasswordToken, nil
+}
+
+type ResetCredentialsRequest struct {
+	Token         string
+	LoginName     string
+	LoginPassword string
+}
+
+type ResetCredentialsResponse struct {
+	UserID string
 }
 
 // ResetCredentialsWithToken checks for users with the given token and resets their login credentials to given values.
 //
 // Event: user.
-func (us *UserService) ResetCredentialsWithToken(resetPasswordToken, new_login_name, new_login_password string) (string, error) {
-	if resetPasswordToken == "" || new_login_name == "" || new_login_password == "" {
-		return "", Mask(InvalidArguments)
-	}
-
-	user, err := us.UserStorage.FindByResetPasswordToken(resetPasswordToken)
-	if err != nil {
-		if IsNotFoundError(err) {
-			return "", Mask(InvalidArguments)
+func (us *UserService) ResetCredentialsWithToken(req ResetCredentialsRequest, resp *ResetCredentialsResponse) error {
+	return us.Executor.Execute("ResetCredentialsWithToken", req, resp, func() error {
+		if req.Token == "" || req.LoginName == "" || req.LoginPassword == "" {
+			return Mask(InvalidArguments)
 		}
-		return "", Mask(err)
-	}
 
-	if time.Now().After(user.ResetPasswordTokenIssued.Add(us.ResetPasswordExpireTime)) {
-		return "", Mask(ResetPasswordTokenExpired)
-	}
+		user, err := us.UserStorage.FindByResetPasswordToken(req.Token)
+		if err != nil {
+			if IsNotFoundError(err) {
+				return Mask(InvalidArguments)
+			}
+			return Mask(err)
+		}
 
-	user.LoginName = new_login_name
-	user.LoginPasswordHash = us.Hasher.Hash(new_login_password)
-	user.ResetPasswordToken = ""
-	user.ResetPasswordTokenIssued = nil
+		if time.Now().After(user.ResetPasswordTokenIssued.Add(us.ResetPasswordExpireTime)) {
+			return Mask(ResetPasswordTokenExpired)
+		}
 
-	if err := us.UserStorage.Save(user); err != nil {
-		return "", Mask(err)
-	}
+		user.LoginName = req.LoginName
+		user.LoginPasswordHash = us.Hasher.Hash(req.LoginPassword)
+		user.ResetPasswordToken = ""
+		user.ResetPasswordTokenIssued = nil
 
-	us.logEvent("user.login_credentials_resetted", map[string]interface{}{
-		"user_id": user.ID,
+		if err := us.UserStorage.Save(user); err != nil {
+			return Mask(err)
+		}
+
+		us.logEvent("user.login_credentials_resetted", map[string]interface{}{
+			"user_id": user.ID,
+		})
+		resp.UserID = user.ID
+		return nil
 	})
 
-	return user.ID, nil
 }
 
 // readModifyWrite reads the user with the given userID, applies modifier to it, saves the result

@@ -3,13 +3,15 @@ package http
 import (
 	"github.com/juju/errgo"
 
-	"log"
 	"net/http"
 	"time"
 )
 
+type Handler func(req *http.Request, entry ResponseRecorder)
+
 type RequestLogger struct {
-	Next http.Handler
+	Next    http.Handler
+	Handler Handler
 }
 
 func (l *RequestLogger) ServeHTTP(resp http.ResponseWriter, req *http.Request) {
@@ -19,15 +21,9 @@ func (l *RequestLogger) ServeHTTP(resp http.ResponseWriter, req *http.Request) {
 
 	l.Next.ServeHTTP(&recorder, req)
 
-	taken := time.Since(now)
+	recorder.TimeTaken = time.Since(now)
 
-	log.Printf("%s %s \"%s\" %d %d\n",
-		req.Method,
-		req.URL,
-		req.UserAgent(),
-		recorder.StatusCode,
-		taken,
-	)
+	l.Handler(req, recorder)
 }
 
 // --------------------------------------------------------------------------------------------
@@ -37,6 +33,8 @@ type ResponseRecorder struct {
 
 	StatusCode   int
 	BytesWritten int64
+
+	TimeTaken time.Duration
 }
 
 // Write sums the writes to produce the actual number of bytes written

@@ -7,6 +7,7 @@ import (
 
 	"github.com/gorilla/mux"
 	"github.com/juju/errgo"
+	metrics "github.com/rcrowley/go-metrics"
 
 	"log"
 	"net/http"
@@ -37,6 +38,7 @@ func NewUserAPIHandler(userService *service.UserService) http.Handler {
 	mux.Methods("POST").Path("/v1/user/reset_login_credentials").Handler(&ResetCredentialsTokenHandler{base})
 
 	mux.Methods("GET").Path("/v1/feed").Handler(&FeedWriter{base})
+	mux.Methods("GET").Path("/v1/metrics").Handler(&MetricsWriter{metrics.DefaultRegistry})
 
 	return mux
 }
@@ -89,14 +91,14 @@ func (h *CreateUserHandler) ServeHTTP(resp http.ResponseWriter, req *http.Reques
 	loginName := req.PostFormValue("login_name")
 	loginPassword := req.PostFormValue("login_password")
 
-	userID, err := h.UserService.CreateUser(profileName, email, loginName, loginPassword)
+	var response service.CreateUserResponse
 
-	if err != nil {
+	if err := h.UserService.CreateUser(service.CreateUserRequest{profileName, email, loginName, loginPassword}, &response); err != nil {
 		h.handleProcessingError(resp, req, MaskError(err))
 	} else {
-		resp.Header().Add("location", "/v1/user/get?id="+userID)
+		resp.Header().Add("location", "/v1/user/get?id="+response.UserID)
 		resp.WriteHeader(http.StatusCreated)
-		resp.Write([]byte(userID))
+		resp.Write([]byte(response.UserID))
 	}
 }
 
@@ -113,11 +115,11 @@ func (h *GetUserHandler) ServeHTTP(resp http.ResponseWriter, req *http.Request) 
 		return
 	}
 
-	user, err := h.UserService.GetUser(userId)
-	if err != nil {
+	var response service.GetUserResponse
+	if err := h.UserService.GetUser(service.GetUserRequest{userId}, &response); err != nil {
 		h.handleProcessingError(resp, req, MaskError(err))
 	} else {
-		h.writeUser(resp, &user)
+		h.writeUser(resp, &response.User)
 	}
 }
 
@@ -154,7 +156,7 @@ func (h *ChangeLoginCredentialsHandler) ServeHTTP(resp http.ResponseWriter, req 
 		return
 	}
 
-	if err := h.UserService.ChangeLoginCredentials(userID, newLogin, newPassword); err != nil {
+	if err := h.UserService.ChangeLoginCredentials(service.ChangeLoginCredentialsRequest{userID, newLogin, newPassword}); err != nil {
 		h.handleProcessingError(resp, req, MaskError(err))
 	} else {
 		resp.WriteHeader(http.StatusNoContent)
@@ -178,7 +180,7 @@ func (h *ChangeProfileNameHandler) ServeHTTP(resp http.ResponseWriter, req *http
 		return
 	}
 
-	if err := h.UserService.ChangeProfileName(userID, newProfileName); err != nil {
+	if err := h.UserService.ChangeProfileName(service.ChangeProfileNameRequest{userID, newProfileName}); err != nil {
 		h.handleProcessingError(resp, req, MaskError(err))
 	} else {
 		httputil.WriteNoContent(resp)
@@ -202,7 +204,7 @@ func (h *ChangeEmailHandler) ServeHTTP(resp http.ResponseWriter, req *http.Reque
 		return
 	}
 
-	if err := h.UserService.ChangeEmail(userID, newEmail); err != nil {
+	if err := h.UserService.ChangeEmail(service.ChangeEmailRequest{userID, newEmail}); err != nil {
 		h.handleProcessingError(resp, req, MaskError(err))
 	} else {
 		resp.WriteHeader(http.StatusNoContent)
@@ -222,16 +224,18 @@ func (h *AuthenticationHandler) ServeHTTP(resp http.ResponseWriter, req *http.Re
 		return
 	}
 
-	userID, err := h.UserService.Authenticate(loginName, loginPassword)
+	var response service.AuthenticateResponse
+	err := h.UserService.Authenticate(service.AuthenticateRequest{loginName, loginPassword}, &response)
 	if err != nil {
 		h.handleProcessingError(resp, req, MaskError(err))
 	} else {
 		resp.WriteHeader(http.StatusOK)
-		resp.Write([]byte(userID))
+		resp.Write([]byte(response.UserID))
 	}
 }
 
 // ----------------------------------------------
+
 type VerifyEmailHandler struct{ BaseHandler }
 
 func (h *VerifyEmailHandler) ServeHTTP(resp http.ResponseWriter, req *http.Request) {
@@ -245,9 +249,9 @@ func (h *VerifyEmailHandler) ServeHTTP(resp http.ResponseWriter, req *http.Reque
 
 	var err error
 	if emailGiven {
-		err = h.UserService.CheckAndSetEmailVerified(userID, email)
+		err = h.UserService.CheckAndSetEmailVerified(service.CheckAndSetEmailVerifiedRequest{userID, email})
 	} else {
-		err = h.UserService.SetEmailVerified(userID)
+		err = h.UserService.SetEmailVerified(service.SetEmailVerifiedRequest{userID})
 	}
 
 	if err != nil {
@@ -266,22 +270,26 @@ func (h *VerifyEmailHandler) Email(req *http.Request) (string, bool) {
 }
 
 // ----------------------------------------------
+
 type NewResetLoginCredentialsHandler struct{ BaseHandler }
 
 func (r *NewResetLoginCredentialsHandler) ServeHTTP(resp http.ResponseWriter, req *http.Request) {
 	email := req.FormValue("email")
 
-	token, err := r.UserService.NewResetLoginCredentialsToken(email)
+	var response service.NewResetCredentialsTokenResponse
+
+	err := r.UserService.NewResetLoginCredentialsToken(service.NewResetCredentialsTokenRequest{email}, &response)
 	if err != nil {
 		r.handleProcessingError(resp, req, err)
 	} else {
 		httputil.WriteJSONResponse(resp, http.StatusOK, map[string]interface{}{
-			"token": token,
+			"token": response.Token,
 		})
 	}
 }
 
 // ----------------------------------------------
+
 type ResetCredentialsTokenHandler struct{ BaseHandler }
 
 func (r *ResetCredentialsTokenHandler) ServeHTTP(resp http.ResponseWriter, req *http.Request) {
@@ -289,8 +297,9 @@ func (r *ResetCredentialsTokenHandler) ServeHTTP(resp http.ResponseWriter, req *
 	login_name := req.FormValue("login_name")
 	login_password := req.FormValue("login_password")
 
-	token, err := r.UserService.ResetCredentialsWithToken(token, login_name, login_password)
-	if err != nil {
+	var response service.ResetCredentialsResponse
+
+	if err := r.UserService.ResetCredentialsWithToken(service.ResetCredentialsRequest{token, login_name, login_password}, &response); err != nil {
 		r.handleProcessingError(resp, req, err)
 	} else {
 		httputil.WriteNoContent(resp)
@@ -303,5 +312,16 @@ type FeedWriter struct{ BaseHandler }
 
 func (h *FeedWriter) ServeHTTP(resp http.ResponseWriter, req *http.Request) {
 	resp.Header().Set("Content-Type", "application/json")
-	h.UserService.EventCollector.WriteJSONStreamOnce(resp)
+	h.UserService.EventCollector.WriteJSONOnce(resp)
+}
+
+// ----------------------------------------------
+
+type MetricsWriter struct {
+	Registry metrics.Registry
+}
+
+func (m *MetricsWriter) ServeHTTP(resp http.ResponseWriter, req *http.Request) {
+	resp.Header().Add("Content-Type", "application/json")
+	metrics.WriteJSONOnce(m.Registry, resp)
 }

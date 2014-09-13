@@ -68,13 +68,19 @@ func (esc *EventCollector) Get() []Item {
 
 // WriteJSONOnce writes the current collected items into the writer.
 // Each item is written on its own line.
-func (esc *EventCollector) WriteJSONStreamOnce(w io.Writer) error {
+func (esc *EventCollector) WriteJSONOnce(w io.Writer) error {
 	items := esc.Get() // get a copy of the item array, should be conflict free for parallel access
 	encoder := json.NewEncoder(w)
-	for _, item := range items {
+	w.Write([]byte("[\n"))
+	for index, item := range items {
+		if index > 0 {
+			w.Write([]byte(",\n"))
+		}
 		if err := encoder.Encode(&item); err != nil {
 			return err
 		}
+
 	}
+	w.Write([]byte("]\n"))
 	return nil
 }

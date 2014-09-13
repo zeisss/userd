@@ -111,4 +111,15 @@ Returns all collected events.
 		{"message": {"userid": "userid()", "email:" "email()"}, "timestamp": "2014-09-01T23:55:50Z+02:00", "tag": "user.created"}
 		... more events ...
 
+### GET /v1/metrics
 
+Returns the internally collected metrics as JSON.
+
++ Response 200 (application/json)
+
+		{
+			"metricname": {
+				"value": 1
+			},
+			"nextmetric...":...
+		}
